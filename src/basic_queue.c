@@ -83,7 +83,7 @@ static void bq_tx_handler(void* context, pn_delivery_t *delivery)
     bq->out_transfers++;
     bq->out_messages++;
     pn_link_advance(link);
-    pn_link_offer(link, size);
+    pn_link_offered(link, size);
 
     printf("[Basic Queue %s: Message Dequeued, depth=%d in=%ld out=%ld]\n",
            bq->desc.name, (int) size, bq->in_messages, bq->out_messages);
@@ -111,7 +111,7 @@ static void bq_rx_handler(void* context, pn_delivery_t *delivery)
 
         item = DEQ_HEAD(bq->out_links);
         while (item) {
-            pn_link_offer(item->link, size);
+            pn_link_offered(item->link, size);
             item = item->next;
         }
     }

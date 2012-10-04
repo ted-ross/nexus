@@ -68,7 +68,7 @@ static void router_tx_handler(void* context, pn_delivery_t *delivery)
     sys_mutex_unlock(router->lock);
 
     pn_link_advance(link);
-    pn_link_offer(link, size);
+    pn_link_offered(link, size);
 }
 
 

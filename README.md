@@ -37,14 +37,3 @@ Dependencies:
 
     http://qpid.apache.org/proton
 
-
-Known Issues:
-
-    IMPORTANT - Nexus uses a facility that is not yet available in the
-    upstream proton source code.  Nexus will not build until the following
-    Jira is resolved:
-
-    https://issues.apache.org/jira/browse/PROTON-39
-
-    You can, of course, apply the patch from the Jira to your proton tree.
-
