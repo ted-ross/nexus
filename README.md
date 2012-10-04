@@ -5,6 +5,7 @@ Multi-Threaded Messaging Server based on Apache Qpid Proton(-c)
 
 
 Introduction:
+
     Nexus is a native server based on Apache Qpid Proton-C.  It's purpose is
     to be a testbed for:
 
