@@ -69,8 +69,8 @@ set(app_SOURCES
     applications/server.c
     )
 
-add_executable(nexus-app ${app_SOURCES})
-target_link_libraries(nexus-app nexus-container)
+add_executable(nexus ${app_SOURCES})
+target_link_libraries(nexus nexus-container)
 
 ##
 ## Build test applications
