@@ -1,0 +1,288 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include <nexus/container.h>
+#include <nexus/message.h>
+#include <proton/engine.h>
+#include <proton/message.h>
+#include <nexus/ctools.h>
+#include <nexus/hash.h>
+#include <nexus/threading.h>
+
+struct container_node_t {
+    node_descriptor_t desc;
+};
+
+static hash_t      *node_map;
+static sys_mutex_t *lock;
+
+void container_init(void)
+{
+    printf("[Container Initializing]\n");
+
+    const nx_allocator_config_t *alloc_config = nx_allocator_default_config();
+    nx_allocator_initialize(alloc_config);
+
+    node_map = hash_initialize(10, 32); // 1K buckets, item batches of 32
+    lock = sys_mutex();
+}
+
+
+static void container_setup_outgoing_link(pn_link_t *link)
+{
+    sys_mutex_lock(lock);
+    container_node_t *node;
+    int               result;
+    const char       *source = pn_link_remote_source(link);
+    // TODO - Extract the name from the structured source
+
+    if (source)
+        result = hash_retrieve(node_map, source, (void*) &node);
+    else
+        result = -1;
+    sys_mutex_unlock(lock);
+
+    if (result < 0) {
+        // Reject the link
+        // TODO - When the API allows, add an error message for "no available node"
+        pn_link_close(link);
+        return;
+    }
+
+    pn_link_set_context(link, node);
+    node->desc.outgoing_handler(node->desc.context, link);
+}
+
+
+static void container_setup_incoming_link(pn_link_t *link)
+{
+    sys_mutex_lock(lock);
+    container_node_t *node;
+    int               result;
+    const char       *target = pn_link_remote_target(link);
+    // TODO - Extract the name from the structured target
+
+    if (target)
+        result = hash_retrieve(node_map, target, (void*) &node);
+    else
+        result = -1;
+    sys_mutex_unlock(lock);
+
+    if (result < 0) {
+        // Reject the link
+        // TODO - When the API allows, add an error message for "no available node"
+        pn_link_close(link);
+        return;
+    }
+
+    pn_link_set_context(link, node);
+    node->desc.incoming_handler(node->desc.context, link);
+}
+
+
+static void container_do_writable(pn_link_t *link)
+{
+    container_node_t *node = (container_node_t*) pn_link_get_context(link);
+    if (!node)
+        return;
+
+    node->desc.writable_handler(node->desc.context, link);
+}
+
+
+static void container_process_receive(pn_delivery_t *delivery)
+{
+    pn_link_t        *link = pn_delivery_link(delivery);
+    container_node_t *node = (container_node_t*) pn_link_get_context(link);
+
+    if (!node)
+        return;  // TODO - reject the message
+
+    node->desc.rx_handler(node->desc.context, delivery);
+}
+
+
+static void container_do_send(pn_delivery_t *delivery)
+{
+    pn_link_t        *link = pn_delivery_link(delivery);
+    container_node_t *node = (container_node_t*) pn_link_get_context(link);
+
+    if (!node)
+        return; // TODO - cancel the delivery
+
+    node->desc.tx_handler(node->desc.context, delivery);
+}
+
+
+static void container_do_updated(pn_delivery_t *delivery)
+{
+    pn_link_t        *link = pn_delivery_link(delivery);
+    container_node_t *node = (container_node_t*) pn_link_get_context(link);
+
+    if (!node)
+        return; // TODO - cancel the delivery
+
+    node->desc.disp_handler(node->desc.context, delivery);
+}
+
+
+int container_handler(void* unused, pn_connection_t *conn)
+{
+    pn_session_t    *ssn;
+    pn_link_t       *link;
+    pn_delivery_t   *delivery;
+    int              event_count = 0;
+
+    // Step 1: setup the engine's connection, and any sessions and links
+    // that may be pending.
+
+    // initialize the connection if it's new
+    if (pn_connection_state(conn) & PN_LOCAL_UNINIT) {
+        printf("[Container: Connection Opened - container=%s hostname=%s]\n",
+               pn_connection_remote_container(conn),
+               pn_connection_remote_hostname(conn));
+        pn_connection_open(conn);
+        event_count++;
+    }
+
+    // open all pending sessions
+    ssn = pn_session_head(conn, PN_LOCAL_UNINIT);
+    while (ssn) {
+        pn_session_open(ssn);
+        printf("[Container: Session Opened]\n");
+        ssn = pn_session_next(ssn, PN_LOCAL_UNINIT);
+        event_count++;
+    }
+
+    // configure and open any pending links
+    link = pn_link_head(conn, PN_LOCAL_UNINIT);
+    while (link) {
+        if (pn_link_is_sender(link))
+            container_setup_outgoing_link(link);
+        else
+            container_setup_incoming_link(link);
+        link = pn_link_next(link, PN_LOCAL_UNINIT);
+        event_count++;
+    }
+
+
+    // Step 2: Now drain all the pending deliveries from the connection's
+    // work queue and process them
+
+    delivery = pn_work_head(conn);
+    while (delivery) {
+        if      (pn_delivery_readable(delivery))
+            container_process_receive(delivery);
+        else if (pn_delivery_writable(delivery))
+            container_do_send(delivery);
+
+        if (pn_delivery_updated(delivery)) 
+            container_do_updated(delivery);
+
+        delivery = pn_work_next(delivery);
+        event_count++;
+    }
+
+    //
+    // Step 2.5: Traverse all of the links on the connection looking for
+    // outgoing links with non-zero credit.  Call the attached node's
+    // writable handler for such links.
+    //
+    link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_ACTIVE);
+    while (link) {
+        assert(pn_session_connection(pn_link_session(link)) == conn);
+        if (pn_link_is_sender(link) && pn_link_credit(link) > 0)
+            container_do_writable(link);
+        link = pn_link_next(link, PN_LOCAL_ACTIVE | PN_REMOTE_ACTIVE);
+    }
+
+    // Step 3: Clean up any links or sessions that have been closed by the
+    // remote.  If the connection has been closed remotely, clean that up
+    // also.
+
+    // teardown any terminating links
+    link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
+    while (link) {
+        printf("[Container: Link Closed - name=%s]\n", pn_link_name(link));
+        container_node_t *node = (container_node_t*) pn_link_get_context(link);
+        if (node)
+            node->desc.link_closed_handler(node->desc.context, link);
+        pn_link_close(link);
+        link = pn_link_next(link, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
+        event_count++;
+    }
+
+    // teardown any terminating sessions
+    ssn = pn_session_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
+    while (ssn) {
+        printf("[Container: Session Closed]\n");
+        pn_session_close(ssn);
+        ssn = pn_session_next(ssn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
+        event_count++;
+    }
+
+    // teardown the connection if it's terminating
+    if (pn_connection_state(conn) == (PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED)) {
+        printf("[Container: Connection Closed]\n");
+        pn_connection_close(conn);
+        event_count++;
+    }
+
+    return event_count;
+}
+
+
+container_node_t *container_register_node(node_descriptor_t desc)
+{
+    container_node_t *node = NEW(container_node_t);
+
+    sys_mutex_lock(lock);
+    if (hash_insert(node_map, desc.name, node) < 0) {
+        free(node);
+        node = 0;
+    } else {
+        node->desc.name = (char*) malloc(strlen(desc.name) + 1);
+        strcpy(node->desc.name, desc.name);
+        node->desc.context             = desc.context;
+        node->desc.rx_handler          = desc.rx_handler;
+        node->desc.tx_handler          = desc.tx_handler;
+        node->desc.disp_handler        = desc.disp_handler;
+        node->desc.incoming_handler    = desc.incoming_handler;
+        node->desc.outgoing_handler    = desc.outgoing_handler;
+        node->desc.writable_handler    = desc.writable_handler;
+        node->desc.link_closed_handler = desc.link_closed_handler;
+    }
+    sys_mutex_unlock(lock);
+    printf("[Container: Node Registered - %s]\n", desc.name);
+    return node;
+}
+
+
+int container_unregister_node(container_node_t *node)
+{
+    sys_mutex_lock(lock);
+    int result = hash_remove(node_map, node->desc.name);
+    sys_mutex_unlock(lock);
+    free(node->desc.name);
+    free(node);
+    return result;
+}
+

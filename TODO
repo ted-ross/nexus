@@ -1,0 +1,47 @@
+List of things that need to be done:
+
+=====
+Add logging to the mt_server module.
+
+=====
+Add listener configuration for SASL and TLS/SSL.
+Add "server" function calls for opening and closing connectors and listeners.
+
+=====
+Refactor the API for the container to deal in node-types rather than nodes.
+Allow node-types to register and then be instantiated via configuration or
+by dynamic attach.  Dyanmic nodes can be deleted when there are no remaining
+attached links.
+
+=====
+Add a simple mechanism for modules to expose state and statistics.
+
+=====
+Add a configuration reader (XML httpd-style)
+
+=====
+Router Notes:
+
+- Router detects munged reply-to headers and replaces them with a routable address.
+  o if addr is ...//<container-id>/something it is munged (accept //_reply_ also)
+  o replace with ...//<routable or mobile>/something
+    x use mobile or routable depending on the source of the link
+  o re-munge on egress? no
+
+- Ingress node puts origin header on message
+
+- Trace may not be needed
+  o Trace can be added if the message has a trace header
+
+- Message structure has two deliveries (incoming and outgoing)
+  o allows disposition and settlement to be transitive
+  o locally terminated are settled immediately
+
+- Transitive disposition for unicast addresses
+  o If message ids undeliverable, use 'released' disposition
+  o downstream delivery comes back relesaed, 
+    x send in alternate direction if known or
+    x release back to the upstream
+    x if we are the origin, we can hold the message for a bit to see if a
+      topology change is in calculation.
+
