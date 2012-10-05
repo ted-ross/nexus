@@ -139,7 +139,7 @@ void nx_timer_schedule(nx_timer_t *timer, long duration)
     // Insert the timer into the schedule and adjust the delta time
     // of the following timer if present.
     //
-    if (total_time < duration) {
+    if (total_time <= duration) {
         assert(ptr == 0);
         timer->delta_time = duration - total_time;
         DEQ_INSERT_TAIL(scheduled_timers, timer);

@@ -181,6 +181,33 @@ static char* test_two_reverse(void *context)
 }
 
 
+static char* test_two_duplicate(void *context)
+{
+    while(fire_head());
+    fire_mask = 0;
+
+    nx_timer_schedule(timers[0], 2);
+    nx_timer_schedule(timers[1], 2);
+
+    sys_mutex_lock(lock);
+    nx_timer_visit_LH(time++);
+    nx_timer_visit_LH(time++);
+    sys_mutex_unlock(lock);
+    int count = fire_head();
+    if (count != 2) return "Expected two firings";
+    fire_head();
+    if (fire_mask != 3) return "Incorrect fire mask 3";
+
+    sys_mutex_lock(lock);
+    nx_timer_visit_LH(time++);
+    nx_timer_visit_LH(time++);
+    sys_mutex_unlock(lock);
+    if (fire_head() > 0) return "Spurious timer fires";
+
+    return 0;
+}
+
+
 static char* test_big(void *context)
 {
     while(fire_head());
@@ -261,6 +288,7 @@ int main(int argc, char **argv)
     TEST_CASE(test_single, 0);
     TEST_CASE(test_two_inorder, 0);
     TEST_CASE(test_two_reverse, 0);
+    TEST_CASE(test_two_duplicate, 0);
     TEST_CASE(test_big, 0);
 
     int i;
