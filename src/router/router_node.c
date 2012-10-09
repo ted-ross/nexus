@@ -58,7 +58,7 @@ static void router_tx_handler(void* context, pn_delivery_t *delivery)
     buf = DEQ_HEAD(msg->buffers);
     while (buf) {
         DEQ_REMOVE_HEAD(msg->buffers);
-        pn_link_send(link, nx_buffer_base(buf), nx_buffer_size(buf));
+        pn_link_send(link, (char*) nx_buffer_base(buf), nx_buffer_size(buf));
         nx_free_buffer(buf);
         buf = DEQ_HEAD(msg->buffers);
     }
@@ -77,6 +77,7 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery)
     nx_router_t  *router = (nx_router_t*) context;
     pn_link_t    *link   = pn_delivery_link(delivery);
     nx_message_t *msg;
+    int           valid_message = 0;
 
     //
     // Receive the message into a local representation.  If the returned message
@@ -85,16 +86,34 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery)
     sys_mutex_lock(router->lock);
     msg = nx_message_receive(delivery);
     if (msg) {
-        DEQ_INSERT_TAIL(router->in_fifo, msg);
+        valid_message = nx_message_check(msg);
+        if (valid_message) {
+            DEQ_INSERT_TAIL(router->in_fifo, msg);
+        }
     }
     sys_mutex_unlock(router->lock);
 
     if (!msg)
         return;
 
+    nx_field_iterator_t iter;
+    int to_present = nx_message_field_to(msg, &iter);
+    if (to_present) {
+        printf("TO: ");
+        unsigned char c;
+        do {
+            c = nx_field_iterator_octet(&iter);
+            printf("%c", c);
+        } while (nx_field_iterator_next(&iter));
+        printf("\n");
+    }
+
     pn_link_advance(link);
     pn_link_flow(link, 1);
-    pn_delivery_update(delivery, PN_ACCEPTED);
+    if (valid_message)
+        pn_delivery_update(delivery, PN_ACCEPTED);
+    else
+        pn_delivery_update(delivery, PN_REJECTED);
     pn_delivery_settle(delivery);
 }
 

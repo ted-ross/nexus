@@ -71,7 +71,7 @@ static void bq_tx_handler(void* context, pn_delivery_t *delivery)
     buf = DEQ_HEAD(msg->buffers);
     while (buf) {
         DEQ_REMOVE_HEAD(msg->buffers);
-        pn_link_send(link, nx_buffer_base(buf), nx_buffer_size(buf));
+        pn_link_send(link, (char*) nx_buffer_base(buf), nx_buffer_size(buf));
         nx_free_buffer(buf);
         buf = DEQ_HEAD(msg->buffers);
     }

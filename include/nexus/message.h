@@ -28,11 +28,30 @@ typedef struct nx_buffer_t  nx_buffer_t;
 typedef DEQ(nx_buffer_t)  nx_buffer_list_t;
 typedef DEQ(nx_message_t) nx_message_list_t;
 
+typedef struct {
+    nx_buffer_t *buffer;  // Buffer that contains the first octet of the field, null if the field is not present
+    size_t       offset;  // Offset in the buffer to the first octet
+    size_t       length;  // Length of the field or zero if unneeded
+    int          parsed;  // non-zero iff the buffer chain has been parsed to find this field
+} nx_field_location_t;
+
+typedef struct {
+    nx_buffer_t   *buffer;
+    unsigned char *cursor;
+    int            length;
+} nx_field_iterator_t;
+
 struct nx_message_t {
     DEQ_LINKS(nx_message_t);
-    nx_buffer_list_t  buffers;
-    pn_delivery_t    *in_delivery;
-    pn_delivery_t    *out_delivery;
+    nx_buffer_list_t     buffers;                     // The buffer chain containing the message
+    pn_delivery_t       *in_delivery;                 // The delivery on which the message arrived
+    pn_delivery_t       *out_delivery;                // The delivery on which the message was last sent
+    nx_field_location_t  section_message_header;      // The message header list
+    nx_field_location_t  section_delivery_annotation; // The delivery annotation map
+    nx_field_location_t  section_message_annotation;  // The message annotation map
+    nx_field_location_t  section_message_properties;  // The message properties list
+    nx_field_location_t  field_user_id;               // The string value of the user-id
+    nx_field_location_t  field_to;                    // The string value of the to field
 };
 
 struct nx_buffer_t {
@@ -64,16 +83,19 @@ nx_buffer_t  *nx_allocate_buffer(void);
 void          nx_free_message(nx_message_t *msg);
 void          nx_free_buffer(nx_buffer_t *buf);
 
-//
-// Append a buffer to the message's buffer chain
-//
-void          nx_message_add_buffer(nx_message_t *msg, nx_buffer_t *buf);
-nx_message_t *nx_message_receive(pn_delivery_t *delivery);
 
-char   *nx_buffer_base(nx_buffer_t *buf);      // Pointer to the first octet in the buffer
-char   *nx_buffer_cursor(nx_buffer_t *buf);    // Pointer to the first free octet in the buffer
-size_t  nx_buffer_capacity(nx_buffer_t *buf);  // Size of free space in the buffer in octets
-size_t  nx_buffer_size(nx_buffer_t *buf);      // Number of octets in the buffer
-void    nx_buffer_insert(nx_buffer_t *buf, size_t len);  // Notify the buffer that 'len' octets were written at cursor
+nx_message_t *nx_message_receive(pn_delivery_t *delivery);
+int nx_message_check(nx_message_t *msg);
+int nx_message_field_to(nx_message_t *msg, nx_field_iterator_t *iter);
+
+
+unsigned char *nx_buffer_base(nx_buffer_t *buf);      // Pointer to the first octet in the buffer
+unsigned char *nx_buffer_cursor(nx_buffer_t *buf);    // Pointer to the first free octet in the buffer
+size_t         nx_buffer_capacity(nx_buffer_t *buf);  // Size of free space in the buffer in octets
+size_t         nx_buffer_size(nx_buffer_t *buf);      // Number of octets in the buffer
+void           nx_buffer_insert(nx_buffer_t *buf, size_t len);  // Notify the buffer that 'len' octets were written at cursor
+
+unsigned char nx_field_iterator_octet(nx_field_iterator_t *iter);
+int nx_field_iterator_next(nx_field_iterator_t *iter);
 
 #endif
