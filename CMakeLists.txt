@@ -56,7 +56,8 @@ set(container_SOURCES
     src/hash.c
     src/agent.c
     src/basic_queue.c
-    src/router.c
+    src/router/router_node.c
+    src/router/router_control.c
     )
 
 add_library(nexus-container SHARED ${container_SOURCES})
