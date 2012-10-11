@@ -70,8 +70,9 @@ nx_link_item_t *nx_link_item(pn_link_t *link)
     item = DEQ_HEAD(link_free_list);
     DEQ_REMOVE_HEAD(link_free_list);
 
-    item->link = link;
-    DEQ_INIT(item->message_fifo);
+    item->link              = link;
+    item->node_context      = 0;
+    item->container_context = 0;
 
     sys_mutex_unlock(lock);
     return item;
@@ -80,17 +81,6 @@ nx_link_item_t *nx_link_item(pn_link_t *link)
 
 void nx_link_item_free(nx_link_item_t *item)
 {
-    if (DEQ_SIZE(item->message_fifo) > 0) {
-        nx_message_t *msg = DEQ_HEAD(item->message_fifo);
-
-        while (msg) {
-            DEQ_REMOVE_HEAD(item->message_fifo);
-            nx_free_message(msg);
-            msg = DEQ_HEAD(item->message_fifo);
-        }
-    }
-    item->link = 0;
-
     sys_mutex_lock(lock);
     DEQ_INSERT_TAIL(link_free_list, item);
     sys_mutex_unlock(lock);

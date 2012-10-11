@@ -22,7 +22,7 @@
 #include <proton/engine.h>
 
 typedef struct container_node_t container_node_t;
-typedef void (*container_delivery_handler_t)(void* context, pn_delivery_t *delivery);
+typedef void (*container_delivery_handler_t)(void* context, pn_delivery_t *delivery, void *link_context);
 typedef void (*container_link_handler_t)    (void* context, pn_link_t     *link);
 
 typedef struct {
@@ -42,5 +42,7 @@ int  container_handler(void* context, pn_connection_t *conn);
 
 container_node_t *container_register_node(node_descriptor_t desc);
 int container_unregister_node(container_node_t *node);
+void container_set_link_context(pn_link_t *link, void *link_context);
+void *container_get_link_context(pn_link_t *link);
 
 #endif

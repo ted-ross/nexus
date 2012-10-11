@@ -50,7 +50,7 @@ static size_t enqueue_message_LH(basic_queue_t *bq, nx_message_t *msg)
 }
 
 
-static void bq_tx_handler(void* context, pn_delivery_t *delivery)
+static void bq_tx_handler(void* context, pn_delivery_t *delivery, void *link_context)
 {
     basic_queue_t  *bq   = (basic_queue_t*) context;
     pn_link_t      *link = pn_delivery_link(delivery);
@@ -90,7 +90,7 @@ static void bq_tx_handler(void* context, pn_delivery_t *delivery)
 }
 
 
-static void bq_rx_handler(void* context, pn_delivery_t *delivery)
+static void bq_rx_handler(void* context, pn_delivery_t *delivery, void *link_context)
 {
     basic_queue_t  *bq = (basic_queue_t*) context;
     pn_link_t      *link = pn_delivery_link(delivery);
@@ -132,7 +132,7 @@ static void bq_rx_handler(void* context, pn_delivery_t *delivery)
 }
 
 
-static void bq_disp_handler(void* context, pn_delivery_t *delivery)
+static void bq_disp_handler(void* context, pn_delivery_t *delivery, void *link_context)
 {
     //basic_queue_t *bq = (basic_queue_t*) context;
     //pn_link_t     *link = pn_link(delivery);
@@ -145,8 +145,8 @@ static void bq_incoming_link_handler(void* context, pn_link_t *link)
 {
     basic_queue_t  *bq    = (basic_queue_t*) context;
     const char     *name  = pn_link_name(link);
-    const char     *r_tgt = pn_link_remote_target(link);
-    const char     *r_src = pn_link_remote_source(link);
+    const char     *r_tgt = pn_terminus_get_address(pn_link_remote_target(link));
+    const char     *r_src = pn_terminus_get_address(pn_link_remote_source(link));
     nx_link_item_t *item  = nx_link_item(link);
 
     sys_mutex_lock(bq->lock);
@@ -156,8 +156,8 @@ static void bq_incoming_link_handler(void* context, pn_link_t *link)
 
         DEQ_INSERT_TAIL(bq->in_links, item);
 
-        pn_link_set_target(link, r_tgt);
-        pn_link_set_source(link, r_src);
+        pn_terminus_copy(pn_link_source(link), pn_link_remote_source(link));
+        pn_terminus_copy(pn_link_target(link), pn_link_remote_target(link));
         pn_link_flow(link, 8);
         pn_link_open(link);
     } else {
@@ -171,8 +171,8 @@ static void bq_outgoing_link_handler(void* context, pn_link_t *link)
 {
     basic_queue_t  *bq = (basic_queue_t*) context;
     const char     *name  = pn_link_name(link);
-    const char     *r_tgt = pn_link_remote_target(link);
-    const char     *r_src = pn_link_remote_source(link);
+    const char     *r_tgt = pn_terminus_get_address(pn_link_remote_target(link));
+    const char     *r_src = pn_terminus_get_address(pn_link_remote_source(link));
     nx_link_item_t *item  = nx_link_item(link);
 
     sys_mutex_lock(bq->lock);
@@ -182,8 +182,8 @@ static void bq_outgoing_link_handler(void* context, pn_link_t *link)
 
         DEQ_INSERT_TAIL(bq->out_links, item);
 
-        pn_link_set_target(link, r_tgt);
-        pn_link_set_source(link, r_src);
+        pn_terminus_copy(pn_link_source(link), pn_link_remote_source(link));
+        pn_terminus_copy(pn_link_target(link), pn_link_remote_target(link));
         pn_link_open(link);
     } else {
         pn_link_close(link);
@@ -206,8 +206,10 @@ static void bq_writable_link_handler(void* context, pn_link_t *link)
     if (grant_delivery) {
         pn_delivery(link, pn_dtag("delivery-xxx", 13)); // TODO - use a unique delivery tag
         delivery = pn_link_current(link);
-        if (delivery)
-            bq_tx_handler(context, delivery);
+        if (delivery) {
+            void *link_context = container_get_link_context(link);
+            bq_tx_handler(context, delivery, link_context);
+        }
     }
 }
 
@@ -216,8 +218,8 @@ static void bq_link_closed_handler(void* context, pn_link_t *link)
 {
     basic_queue_t  *bq = (basic_queue_t*) context;
     const char     *name  = pn_link_name(link);
-    const char     *r_tgt = pn_link_remote_target(link);
-    const char     *r_src = pn_link_remote_source(link);
+    const char     *r_tgt = pn_terminus_get_address(pn_link_remote_target(link));
+    const char     *r_src = pn_terminus_get_address(pn_link_remote_source(link));
     nx_link_item_t *item;
 
     printf("[Basic Queue %s: Link Closed - name=%s source=%s target=%s]\n",

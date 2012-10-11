@@ -24,6 +24,8 @@
 #include <nexus/threading.h>
 #include <nexus/timer.h>
 #include <nexus/ctools.h>
+#include <nexus/hash.h>
+#include <nexus/iterator.h>
 
 struct nx_router_t {
     node_descriptor_t  desc;
@@ -31,29 +33,36 @@ struct nx_router_t {
     nx_link_list_t     in_links;
     nx_link_list_t     out_links;
     nx_message_list_t  in_fifo;
-    nx_message_list_t  out_fifo;
     sys_mutex_t       *lock;
     nx_timer_t        *timer;
+    hash_t            *out_hash;
 };
 
 
-static void router_tx_handler(void* context, pn_delivery_t *delivery)
+typedef struct {
+    pn_link_t         *link;
+    nx_message_list_t  out_fifo;
+} nx_router_link_t;
+
+
+static void router_tx_handler(void* context, pn_delivery_t *delivery, void *link_context)
 {
-    nx_router_t    *router = (nx_router_t*) context;
-    pn_link_t      *link   = pn_delivery_link(delivery);
-    nx_message_t   *msg;
-    nx_buffer_t    *buf;
-    size_t          size;
+    nx_router_t      *router = (nx_router_t*) context;
+    pn_link_t        *link   = pn_delivery_link(delivery);
+    nx_router_link_t *rlink = (nx_router_link_t*) link_context;
+    nx_message_t     *msg;
+    nx_buffer_t      *buf;
+    size_t            size;
 
     sys_mutex_lock(router->lock);
-    msg = DEQ_HEAD(router->out_fifo);
+    msg = DEQ_HEAD(rlink->out_fifo);
     if (!msg) {
         // TODO - Recind the delivery
         sys_mutex_unlock(router->lock);
         return;
     }
 
-    DEQ_REMOVE_HEAD(router->out_fifo);
+    DEQ_REMOVE_HEAD(rlink->out_fifo);
 
     buf = DEQ_HEAD(msg->buffers);
     while (buf) {
@@ -63,8 +72,8 @@ static void router_tx_handler(void* context, pn_delivery_t *delivery)
         buf = DEQ_HEAD(msg->buffers);
     }
 
-    nx_free_message(msg); // TODO - Move to 'archived' state, don't free
-    size = (DEQ_SIZE(router->out_fifo));
+    nx_free_message(msg);
+    size = (DEQ_SIZE(rlink->out_fifo));
     sys_mutex_unlock(router->lock);
 
     pn_link_advance(link);
@@ -72,7 +81,7 @@ static void router_tx_handler(void* context, pn_delivery_t *delivery)
 }
 
 
-static void router_rx_handler(void* context, pn_delivery_t *delivery)
+static void router_rx_handler(void* context, pn_delivery_t *delivery, void *link_context)
 {
     nx_router_t  *router = (nx_router_t*) context;
     pn_link_t    *link   = pn_delivery_link(delivery);
@@ -85,28 +94,35 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery)
     //
     sys_mutex_lock(router->lock);
     msg = nx_message_receive(delivery);
-    if (msg) {
+    if (msg)
         valid_message = nx_message_check(msg);
-        if (valid_message) {
-            DEQ_INSERT_TAIL(router->in_fifo, msg);
-        }
-    }
     sys_mutex_unlock(router->lock);
 
     if (!msg)
         return;
 
     nx_field_iterator_t *iter = nx_message_field_to(msg);
+    nx_router_link_t    *rlink;
     if (iter) {
         nx_field_iterator_reset(iter, ITER_VIEW_NODE_SPECIFIC);
-        printf("TO: ");
+        printf("Received message to: ");
         unsigned char c;
         while (!nx_field_iterator_end(iter)) {
             c = nx_field_iterator_octet(iter);
             printf("%c", c);
         }
         printf("\n");
+
+        nx_field_iterator_reset(iter, ITER_VIEW_NODE_SPECIFIC);
+        sys_mutex_lock(router->lock);
+        int result = hash_retrieve(router->out_hash, iter, (void*) &rlink);
+        sys_mutex_unlock(router->lock);
         nx_field_iterator_free(iter);
+
+        if (result == 0) {
+            DEQ_INSERT_TAIL(rlink->out_fifo, msg);
+            pn_link_offered(rlink->link, DEQ_SIZE(rlink->out_fifo));
+        }
     }
 
     pn_link_advance(link);
@@ -119,7 +135,7 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery)
 }
 
 
-static void router_disp_handler(void* context, pn_delivery_t *delivery)
+static void router_disp_handler(void* context, pn_delivery_t *delivery, void *link_context)
 {
     //nx_router_t *router = (nx_router_t*) context;
     //pn_link_t     *link = pn_link(delivery);
@@ -132,8 +148,8 @@ static void router_incoming_link_handler(void* context, pn_link_t *link)
 {
     nx_router_t    *router = (nx_router_t*) context;
     const char     *name   = pn_link_name(link);
-    const char     *r_tgt  = pn_link_remote_target(link);
-    const char     *r_src  = pn_link_remote_source(link);
+    const char     *r_tgt  = pn_terminus_get_address(pn_link_remote_target(link));
+    const char     *r_src  = pn_terminus_get_address(pn_link_remote_source(link));
     nx_link_item_t *item   = nx_link_item(link);
 
     sys_mutex_lock(router->lock);
@@ -143,8 +159,8 @@ static void router_incoming_link_handler(void* context, pn_link_t *link)
 
         DEQ_INSERT_TAIL(router->in_links, item);
 
-        pn_link_set_target(link, r_tgt);
-        pn_link_set_source(link, r_src);
+        pn_terminus_copy(pn_link_source(link), pn_link_remote_source(link));
+        pn_terminus_copy(pn_link_target(link), pn_link_remote_target(link));
         pn_link_flow(link, 8);
         pn_link_open(link);
     } else {
@@ -158,43 +174,54 @@ static void router_outgoing_link_handler(void* context, pn_link_t *link)
 {
     nx_router_t    *router = (nx_router_t*) context;
     const char     *name   = pn_link_name(link);
-    const char     *r_tgt  = pn_link_remote_target(link);
-    const char     *r_src  = pn_link_remote_source(link);
-    nx_link_item_t *item   = nx_link_item(link);
+    const char     *r_tgt  = pn_terminus_get_address(pn_link_remote_target(link));
+    const char     *r_src  = pn_terminus_get_address(pn_link_remote_source(link));
 
     sys_mutex_lock(router->lock);
-    if (item) {
-        printf("[Router %s: Opening Outgoing Link - name=%s source=%s target=%s]\n",
-               router->desc.name, name, r_src, r_tgt);
+    printf("[Router %s: Opening Outgoing Link - name=%s source=%s target=%s]\n",
+           router->desc.name, name, r_src, r_tgt);
 
-        DEQ_INSERT_TAIL(router->out_links, item);
+    nx_router_link_t *rlink = NEW(nx_router_link_t);
+    rlink->link = link;
+    DEQ_INIT(rlink->out_fifo);
+    container_set_link_context(link, rlink);
 
-        pn_link_set_target(link, r_tgt);
-        pn_link_set_source(link, r_src);
+    nx_field_iterator_t *iter = nx_field_iterator_string(r_tgt, ITER_VIEW_NODE_SPECIFIC);
+    int result = hash_insert(router->out_hash, iter, rlink);
+    nx_field_iterator_free(iter);
+
+    if (result == 0) {
+        pn_terminus_copy(pn_link_source(link), pn_link_remote_source(link));
+        pn_terminus_copy(pn_link_target(link), pn_link_remote_target(link));
         pn_link_open(link);
-    } else {
-        pn_link_close(link);
+        sys_mutex_unlock(router->lock);
+        return;
     }
+
+    pn_link_close(link);
     sys_mutex_unlock(router->lock);
 }
 
 
 static void router_writable_link_handler(void* context, pn_link_t *link)
 {
-    nx_router_t *router = (nx_router_t*) context;
+    nx_router_t   *router = (nx_router_t*) context;
     int            grant_delivery = 0;
     pn_delivery_t *delivery;
+    nx_router_link_t *rlink = (nx_router_link_t*) container_get_link_context(link);
 
     sys_mutex_lock(router->lock);
-    if (DEQ_SIZE(router->out_fifo) > 0)
+    if (DEQ_SIZE(rlink->out_fifo) > 0)
         grant_delivery = 1;
     sys_mutex_unlock(router->lock);
 
     if (grant_delivery) {
         pn_delivery(link, pn_dtag("delivery-xxx", 13)); // TODO - use a unique delivery tag
         delivery = pn_link_current(link);
-        if (delivery)
-            router_tx_handler(context, delivery);
+        if (delivery) {
+            void *link_context = container_get_link_context(link);
+            router_tx_handler(context, delivery, link_context);
+        }
     }
 }
 
@@ -203,8 +230,8 @@ static void router_link_closed_handler(void* context, pn_link_t *link)
 {
     nx_router_t    *router = (nx_router_t*) context;
     const char     *name   = pn_link_name(link);
-    const char     *r_tgt  = pn_link_remote_target(link);
-    const char     *r_src  = pn_link_remote_source(link);
+    const char     *r_tgt  = pn_terminus_get_address(pn_link_remote_target(link));
+    const char     *r_src  = pn_terminus_get_address(pn_link_remote_source(link));
     nx_link_item_t *item;
 
     printf("[Router %s: Link Closed - name=%s source=%s target=%s]\n",
@@ -268,12 +295,13 @@ nx_router_t *nx_router(char *name, nx_router_configuration_t *config)
     DEQ_INIT(router->in_links);
     DEQ_INIT(router->out_links);
     DEQ_INIT(router->in_fifo);
-    DEQ_INIT(router->out_fifo);
 
     router->lock = sys_mutex();
 
     router->timer = nx_timer(nx_router_timer_handler, (void*) router);
     nx_timer_schedule(router->timer, 0); // Immediate
+
+    router->out_hash = hash_initialize(10, 32);
 
     return router;
 }

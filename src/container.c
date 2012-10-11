@@ -27,6 +27,7 @@
 #include <nexus/hash.h>
 #include <nexus/threading.h>
 #include <nexus/iterator.h>
+#include <nexus/link_allocator.h>
 
 struct container_node_t {
     node_descriptor_t desc;
@@ -52,7 +53,7 @@ static void container_setup_outgoing_link(pn_link_t *link)
     sys_mutex_lock(lock);
     container_node_t    *node;
     int                  result;
-    const char          *source = pn_link_remote_source(link);
+    const char          *source = pn_terminus_get_address(pn_link_remote_source(link));
     nx_field_iterator_t *iter;
     // TODO - Extract the name from the structured source
 
@@ -71,7 +72,10 @@ static void container_setup_outgoing_link(pn_link_t *link)
         return;
     }
 
-    pn_link_set_context(link, node);
+    nx_link_item_t *item = nx_link_item(link);
+    item->container_context = node;
+
+    pn_link_set_context(link, item);
     node->desc.outgoing_handler(node->desc.context, link);
 }
 
@@ -81,7 +85,7 @@ static void container_setup_incoming_link(pn_link_t *link)
     sys_mutex_lock(lock);
     container_node_t    *node;
     int                  result;
-    const char          *target = pn_link_remote_target(link);
+    const char          *target = pn_terminus_get_address(pn_link_remote_target(link));
     nx_field_iterator_t *iter;
     // TODO - Extract the name from the structured target
 
@@ -100,14 +104,21 @@ static void container_setup_incoming_link(pn_link_t *link)
         return;
     }
 
-    pn_link_set_context(link, node);
+    nx_link_item_t *item = nx_link_item(link);
+    item->container_context = node;
+
+    pn_link_set_context(link, item);
     node->desc.incoming_handler(node->desc.context, link);
 }
 
 
 static void container_do_writable(pn_link_t *link)
 {
-    container_node_t *node = (container_node_t*) pn_link_get_context(link);
+    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
+    if (!item)
+        return;
+
+    container_node_t *node = (container_node_t*) item->container_context;
     if (!node)
         return;
 
@@ -117,37 +128,54 @@ static void container_do_writable(pn_link_t *link)
 
 static void container_process_receive(pn_delivery_t *delivery)
 {
-    pn_link_t        *link = pn_delivery_link(delivery);
-    container_node_t *node = (container_node_t*) pn_link_get_context(link);
+    pn_link_t      *link = pn_delivery_link(delivery);
+    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
 
-    if (!node)
-        return;  // TODO - reject the message
+    if (item) {
+        container_node_t *node = (container_node_t*) item->container_context;
+        if (node) {
+            node->desc.rx_handler(node->desc.context, delivery, item->node_context);
+            return;
+        }
+    }
 
-    node->desc.rx_handler(node->desc.context, delivery);
+    //
+    // Reject the delivery if we couldn't find a node to handle it
+    //
+    pn_link_advance(link);
+    pn_link_flow(link, 1);
+    pn_delivery_update(delivery, PN_REJECTED);
+    pn_delivery_settle(delivery);
 }
 
 
 static void container_do_send(pn_delivery_t *delivery)
 {
-    pn_link_t        *link = pn_delivery_link(delivery);
-    container_node_t *node = (container_node_t*) pn_link_get_context(link);
+    pn_link_t      *link = pn_delivery_link(delivery);
+    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
 
-    if (!node)
-        return; // TODO - cancel the delivery
+    if (item) {
+        container_node_t *node = (container_node_t*) item->container_context;
+        if (node) {
+            node->desc.tx_handler(node->desc.context, delivery, item->node_context);
+            return;
+        }
+    }
 
-    node->desc.tx_handler(node->desc.context, delivery);
+    // TODO - Cancel the delivery
 }
 
 
 static void container_do_updated(pn_delivery_t *delivery)
 {
-    pn_link_t        *link = pn_delivery_link(delivery);
-    container_node_t *node = (container_node_t*) pn_link_get_context(link);
+    pn_link_t      *link = pn_delivery_link(delivery);
+    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
 
-    if (!node)
-        return; // TODO - cancel the delivery
-
-    node->desc.disp_handler(node->desc.context, delivery);
+    if (item) {
+        container_node_t *node = (container_node_t*) item->container_context;
+        if (node)
+            node->desc.disp_handler(node->desc.context, delivery, item->node_context);
+    }
 }
 
 
@@ -229,7 +257,8 @@ int container_handler(void* unused, pn_connection_t *conn)
     link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
     while (link) {
         printf("[Container: Link Closed - name=%s]\n", pn_link_name(link));
-        container_node_t *node = (container_node_t*) pn_link_get_context(link);
+        nx_link_item_t   *item = (nx_link_item_t*) pn_link_get_context(link);
+        container_node_t *node = (container_node_t*) item->container_context;
         if (node)
             node->desc.link_closed_handler(node->desc.context, link);
         pn_link_close(link);
@@ -296,5 +325,22 @@ int container_unregister_node(container_node_t *node)
     free(node);
     nx_field_iterator_free(iter);
     return result;
+}
+
+
+void container_set_link_context(pn_link_t *link, void *link_context)
+{
+    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
+    if (item)
+        item->node_context = link_context;
+}
+
+
+void *container_get_link_context(pn_link_t *link)
+{
+    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
+    if (item)
+        return item->node_context;
+    return 0;
 }
 

@@ -20,13 +20,13 @@
  */
 
 #include <proton/engine.h>
-#include <nexus/message.h>
 #include <nexus/ctools.h>
 
 typedef struct nx_link_item_t {
     DEQ_LINKS(struct nx_link_item_t);
-    pn_link_t         *link;
-    nx_message_list_t  message_fifo;
+    pn_link_t *link;
+    void      *container_context;
+    void      *node_context;
 } nx_link_item_t;
 
 typedef DEQ(nx_link_item_t) nx_link_list_t;

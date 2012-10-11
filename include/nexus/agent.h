@@ -27,7 +27,7 @@ void agent_finalize(void);
 void agent_incoming_link_handler(void* context, pn_link_t *link);
 void agent_outgoing_link_handler(void* context, pn_link_t *link);
 void agent_link_closed_handler(void* context, pn_link_t *link);
-void agent_tx_handler(void* context, pn_delivery_t *delivery);
-void agent_rx_handler(void* context, pn_delivery_t *delivery);
+void agent_tx_handler(void* context, pn_delivery_t *delivery, void *link_context);
+void agent_rx_handler(void* context, pn_delivery_t *delivery, void *link_context);
 
 #endif

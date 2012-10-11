@@ -58,12 +58,13 @@ void agent_finalize(void)
 void agent_incoming_link_handler(void* context, pn_link_t *link)
 {
     const char *name  = pn_link_name(link);
-    const char *r_tgt = pn_link_remote_target(link);
-    const char *r_src = pn_link_remote_source(link);
+    const char *r_tgt = pn_terminus_get_address(pn_link_remote_target(link));
+    const char *r_src = pn_terminus_get_address(pn_link_remote_source(link));
 
     printf("[Agent: Opening Incoming Link - name=%s source=%s target=%s]\n", name, r_src, r_tgt);
 
-    pn_link_set_target(link, r_tgt);
+    pn_terminus_copy(pn_link_source(link), pn_link_remote_source(link));
+    pn_terminus_copy(pn_link_target(link), pn_link_remote_target(link));
     pn_link_flow(link, 1);
     pn_link_open(link);
 }
@@ -72,37 +73,32 @@ void agent_incoming_link_handler(void* context, pn_link_t *link)
 void agent_outgoing_link_handler(void* context, pn_link_t *link)
 {
     const char *name  = pn_link_name(link);
-    const char *r_tgt = pn_link_remote_target(link);
-    const char *r_src = pn_link_remote_source(link);
+    const char *r_tgt = pn_terminus_get_address(pn_link_remote_target(link));
+    const char *r_src = pn_terminus_get_address(pn_link_remote_source(link));
 
     printf("[Agent: Opening Outgoing Link - name=%s source=%s target=%s]\n", name, r_src, r_tgt);
 
     // TODO - Put the target into a hash table of destinations to be matched against reply-tos
 
-    pn_link_set_source(link, r_src);
+    pn_terminus_copy(pn_link_source(link), pn_link_remote_source(link));
+    pn_terminus_copy(pn_link_target(link), pn_link_remote_target(link));
     pn_link_open(link);
 }
 
 
 void agent_link_closed_handler(void* context, pn_link_t *link)
 {
-    const char *name  = pn_link_name(link);
-    const char *r_tgt = pn_link_remote_target(link);
-    const char *r_src = pn_link_remote_source(link);
-
-    printf("[Agent: Link Closed - name=%s source=%s target=%s]\n", name, r_src, r_tgt);
-
     // TODO - If this is an outgoing link, remove its target from the destination map.
 }
 
 
-void agent_tx_handler(void* context, pn_delivery_t *delivery)
+void agent_tx_handler(void* context, pn_delivery_t *delivery, void *link_context)
 {
     // TODO - Send replies enqueued for this link.
 }
 
 
-void agent_rx_handler(void* context, pn_delivery_t *delivery)
+void agent_rx_handler(void* context, pn_delivery_t *delivery, void *link_context)
 {
 #define BUFFER_SIZE 1024
     pn_link_t    *link = pn_delivery_link(delivery);
