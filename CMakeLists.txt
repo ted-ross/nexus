@@ -58,6 +58,7 @@ set(container_SOURCES
     src/basic_queue.c
     src/router/router_node.c
     src/router/router_control.c
+    src/iterator.c
     )
 
 add_library(nexus-container SHARED ${container_SOURCES})

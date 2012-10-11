@@ -602,18 +602,14 @@ int nx_message_check(nx_message_t *msg)
 }
 
 
-int nx_message_field_to(nx_message_t *msg, nx_field_iterator_t *iter)
+nx_field_iterator_t *nx_message_field_to(nx_message_t *msg)
 {
     while (1) {
-        if (msg->field_to.parsed) {
-            iter->buffer = msg->field_to.buffer;
-            iter->cursor = nx_buffer_base(msg->field_to.buffer) + msg->field_to.offset;
-            iter->length = msg->field_to.length;
-            break;
-        }
+        if (msg->field_to.parsed)
+            return nx_field_iterator_buffer(msg->field_to.buffer, msg->field_to.offset, msg->field_to.length, ITER_VIEW_NONE);
 
         if (msg->section_message_properties.parsed == 0)
-            return 0;
+            break;
 
         nx_buffer_t   *buffer = msg->section_message_properties.buffer;
         unsigned char *cursor = nx_buffer_base(buffer) + msg->section_message_properties.offset;
@@ -622,7 +618,7 @@ int nx_message_field_to(nx_message_t *msg, nx_field_iterator_t *iter)
         int result;
 
         if (count < 3)
-            return 0;
+            break;
 
         result = traverse_field(&cursor, &buffer, 0); // message_id
         if (!result) return 0;
@@ -632,7 +628,7 @@ int nx_message_field_to(nx_message_t *msg, nx_field_iterator_t *iter)
         if (!result) return 0;
     }
 
-    return 1;
+    return 0;
 }
 
 
@@ -664,30 +660,5 @@ void nx_buffer_insert(nx_buffer_t *buf, size_t len)
 {
     buf->size += len;
     assert(buf->size <= config->buffer_size);
-}
-
-
-unsigned char nx_field_iterator_octet(nx_field_iterator_t *iter)
-{
-    return *(iter->cursor);
-}
-
-
-int nx_field_iterator_next(nx_field_iterator_t *iter)
-{
-    iter->cursor++;
-    iter->length--;
-
-    if (iter->length == 0)
-        return 0;
-
-    if (iter->cursor - nx_buffer_base(iter->buffer) == nx_buffer_size(iter->buffer)) {
-        iter->buffer = iter->buffer->next;
-        if (iter->buffer == 0)
-            return 0;
-        iter->cursor = nx_buffer_base(iter->buffer);
-    }
-
-    return 1;
 }
 

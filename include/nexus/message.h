@@ -21,6 +21,7 @@
 
 #include <proton/engine.h>
 #include <nexus/ctools.h>
+#include <nexus/iterator.h>
 
 typedef struct nx_message_t nx_message_t;
 typedef struct nx_buffer_t  nx_buffer_t;
@@ -34,12 +35,6 @@ typedef struct {
     size_t       length;  // Length of the field or zero if unneeded
     int          parsed;  // non-zero iff the buffer chain has been parsed to find this field
 } nx_field_location_t;
-
-typedef struct {
-    nx_buffer_t   *buffer;
-    unsigned char *cursor;
-    int            length;
-} nx_field_iterator_t;
 
 struct nx_message_t {
     DEQ_LINKS(nx_message_t);
@@ -86,7 +81,7 @@ void          nx_free_buffer(nx_buffer_t *buf);
 
 nx_message_t *nx_message_receive(pn_delivery_t *delivery);
 int nx_message_check(nx_message_t *msg);
-int nx_message_field_to(nx_message_t *msg, nx_field_iterator_t *iter);
+nx_field_iterator_t *nx_message_field_to(nx_message_t *msg);
 
 
 unsigned char *nx_buffer_base(nx_buffer_t *buf);      // Pointer to the first octet in the buffer
@@ -94,8 +89,5 @@ unsigned char *nx_buffer_cursor(nx_buffer_t *buf);    // Pointer to the first fr
 size_t         nx_buffer_capacity(nx_buffer_t *buf);  // Size of free space in the buffer in octets
 size_t         nx_buffer_size(nx_buffer_t *buf);      // Number of octets in the buffer
 void           nx_buffer_insert(nx_buffer_t *buf, size_t len);  // Notify the buffer that 'len' octets were written at cursor
-
-unsigned char nx_field_iterator_octet(nx_field_iterator_t *iter);
-int nx_field_iterator_next(nx_field_iterator_t *iter);
 
 #endif
