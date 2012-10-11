@@ -606,7 +606,7 @@ nx_field_iterator_t *nx_message_field_to(nx_message_t *msg)
 {
     while (1) {
         if (msg->field_to.parsed)
-            return nx_field_iterator_buffer(msg->field_to.buffer, msg->field_to.offset, msg->field_to.length, ITER_VIEW_NONE);
+            return nx_field_iterator_buffer(msg->field_to.buffer, msg->field_to.offset, msg->field_to.length, ITER_VIEW_ALL);
 
         if (msg->section_message_properties.parsed == 0)
             break;
