@@ -26,6 +26,7 @@
 #include <nexus/ctools.h>
 #include <nexus/hash.h>
 #include <nexus/threading.h>
+#include <nexus/iterator.h>
 
 struct container_node_t {
     node_descriptor_t desc;
@@ -49,14 +50,17 @@ void container_init(void)
 static void container_setup_outgoing_link(pn_link_t *link)
 {
     sys_mutex_lock(lock);
-    container_node_t *node;
-    int               result;
-    const char       *source = pn_link_remote_source(link);
+    container_node_t    *node;
+    int                  result;
+    const char          *source = pn_link_remote_source(link);
+    nx_field_iterator_t *iter;
     // TODO - Extract the name from the structured source
 
-    if (source)
-        result = hash_retrieve(node_map, source, (void*) &node);
-    else
+    if (source) {
+        iter   = nx_field_iterator_string(source, ITER_VIEW_NODE_ID);
+        result = hash_retrieve(node_map, iter, (void*) &node);
+        nx_field_iterator_free(iter);
+    } else
         result = -1;
     sys_mutex_unlock(lock);
 
@@ -75,14 +79,17 @@ static void container_setup_outgoing_link(pn_link_t *link)
 static void container_setup_incoming_link(pn_link_t *link)
 {
     sys_mutex_lock(lock);
-    container_node_t *node;
-    int               result;
-    const char       *target = pn_link_remote_target(link);
+    container_node_t    *node;
+    int                  result;
+    const char          *target = pn_link_remote_target(link);
+    nx_field_iterator_t *iter;
     // TODO - Extract the name from the structured target
 
-    if (target)
-        result = hash_retrieve(node_map, target, (void*) &node);
-    else
+    if (target) {
+        iter   = nx_field_iterator_string(target, ITER_VIEW_NODE_ID);
+        result = hash_retrieve(node_map, iter, (void*) &node);
+        nx_field_iterator_free(iter);
+    } else
         result = -1;
     sys_mutex_unlock(lock);
 
@@ -252,10 +259,11 @@ int container_handler(void* unused, pn_connection_t *conn)
 
 container_node_t *container_register_node(node_descriptor_t desc)
 {
-    container_node_t *node = NEW(container_node_t);
+    container_node_t    *node = NEW(container_node_t);
+    nx_field_iterator_t *iter = nx_field_iterator_string(desc.name, ITER_VIEW_ALL);
 
     sys_mutex_lock(lock);
-    if (hash_insert(node_map, desc.name, node) < 0) {
+    if (hash_insert(node_map, iter, node) < 0) {
         free(node);
         node = 0;
     } else {
@@ -271,6 +279,7 @@ container_node_t *container_register_node(node_descriptor_t desc)
         node->desc.link_closed_handler = desc.link_closed_handler;
     }
     sys_mutex_unlock(lock);
+    nx_field_iterator_free(iter);
     printf("[Container: Node Registered - %s]\n", desc.name);
     return node;
 }
@@ -278,11 +287,14 @@ container_node_t *container_register_node(node_descriptor_t desc)
 
 int container_unregister_node(container_node_t *node)
 {
+    nx_field_iterator_t *iter = nx_field_iterator_string(node->desc.name, ITER_VIEW_ALL);
+
     sys_mutex_lock(lock);
-    int result = hash_remove(node_map, node->desc.name);
+    int result = hash_remove(node_map, iter);
     sys_mutex_unlock(lock);
     free(node->desc.name);
     free(node);
+    nx_field_iterator_free(iter);
     return result;
 }
 

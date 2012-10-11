@@ -20,6 +20,7 @@
  */
 
 #include <stdlib.h>
+#include <nexus/iterator.h>
 
 typedef struct hash_t hash_t;
 
@@ -27,8 +28,8 @@ hash_t *hash_initialize(int bucket_exponent, int batch_size);
 void hash_finalize(hash_t *h);
 
 size_t hash_size(hash_t *h);
-int    hash_insert(hash_t *h, const char *key, void *val);
-int    hash_retrieve(hash_t *h, const char *key, void **val);
-int    hash_remove(hash_t *h, const char *key);
+int    hash_insert(hash_t *h, nx_field_iterator_t *key, void *val);
+int    hash_retrieve(hash_t *h, nx_field_iterator_t *key, void **val);
+int    hash_remove(hash_t *h, nx_field_iterator_t *key);
 
 #endif

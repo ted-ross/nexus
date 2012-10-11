@@ -53,7 +53,7 @@ STATE_AT_NODE_ID
 
 static void view_initialize(nx_field_iterator_t *iter)
 {
-    if (iter->view == ITER_VIEW_NONE) {
+    if (iter->view == ITER_VIEW_ALL) {
         iter->mode = MODE_TO_END;
         return;
     }
@@ -139,7 +139,7 @@ static void view_initialize(nx_field_iterator_t *iter)
 }
 
 
-nx_field_iterator_t* nx_field_iterator_string(char *text, nx_iterator_view_t view)
+nx_field_iterator_t* nx_field_iterator_string(const char *text, nx_iterator_view_t view)
 {
     nx_field_iterator_t *iter = NEW(nx_field_iterator_t);
     if (!iter)
@@ -219,5 +219,40 @@ unsigned char nx_field_iterator_octet(nx_field_iterator_t *iter)
 int nx_field_iterator_end(nx_field_iterator_t *iter)
 {
     return iter->length == 0;
+}
+
+
+int nx_field_iterator_equal(nx_field_iterator_t *iter, unsigned char *string)
+{
+    nx_field_iterator_reset(iter, iter->view);
+    while (!nx_field_iterator_end(iter) && *string) {
+        if (*string != nx_field_iterator_octet(iter))
+            return 0;
+        string++;
+    }
+
+    return (nx_field_iterator_end(iter) && (*string == 0));
+}
+
+
+unsigned char *nx_field_iterator_copy(nx_field_iterator_t *iter)
+{
+    int            length = 0;
+    int            idx    = 0;
+    unsigned char *copy;
+
+    nx_field_iterator_reset(iter, iter->view);
+    while (!nx_field_iterator_end(iter)) {
+        nx_field_iterator_octet(iter);
+        length++;
+    }
+
+    nx_field_iterator_reset(iter, iter->view);
+    copy = (unsigned char*) malloc(length + 1);
+    while (!nx_field_iterator_end(iter))
+        copy[idx++] = nx_field_iterator_octet(iter);
+    copy[idx] = '\0';
+
+    return copy;
 }
 

@@ -33,7 +33,7 @@ typedef struct nx_field_iterator_t nx_field_iterator_t;
  * Iterator views allow the code traversing the field to see a transformed
  * view of the raw field.
  *
- * ITER_VIEW_NONE - No transformation of the raw field data
+ * ITER_VIEW_ALL - No transformation of the raw field data
  *
  * ITER_VIEW_NODE_ID - Isolate the node identifier from an address
  *
@@ -50,7 +50,7 @@ typedef struct nx_field_iterator_t nx_field_iterator_t;
  *            ^^^^^^^^^^^^^
  */
 typedef enum {
-    ITER_VIEW_NONE,
+    ITER_VIEW_ALL,
     ITER_VIEW_NODE_ID,
     ITER_VIEW_NODE_SPECIFIC
 } nx_iterator_view_t;
@@ -61,7 +61,7 @@ typedef enum {
  * The "text" string must stay intact for the whole life of the iterator.  The iterator
  * does not copy the string, it references it.
  */
-nx_field_iterator_t* nx_field_iterator_string(char               *text,
+nx_field_iterator_t* nx_field_iterator_string(const char         *text,
                                               nx_iterator_view_t  view);
 
 /**
@@ -92,5 +92,15 @@ unsigned char nx_field_iterator_octet(nx_field_iterator_t *iter);
  * Return true iff the iterator has no more octets in the view.
  */
 int nx_field_iterator_end(nx_field_iterator_t *iter);
+
+/**
+ * Compare an input string to the iterator's view.  Return true iff they are equal.
+ */
+int nx_field_iterator_equal(nx_field_iterator_t *iter, unsigned char *string);
+
+/**
+ * Return a copy of the iterator's view.
+ */
+unsigned char *nx_field_iterator_copy(nx_field_iterator_t *iter);
 
 #endif

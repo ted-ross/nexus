@@ -24,8 +24,8 @@
 
 typedef struct item_t {
     DEQ_LINKS(struct item_t);
-    char *key;
-    void *val;
+    unsigned char *key;
+    void          *val;
 } item_t;
 
 
@@ -48,17 +48,15 @@ struct hash_t {
 
 
 // djb2 hash algorithm
-static unsigned long hash_function(const char *sstr)
+static unsigned long hash_function(nx_field_iterator_t *iter)
 {
-    const unsigned char *str = (const unsigned char*) sstr;
     unsigned long hash = 5381;
     int c;
 
-    if (str == 0)
-        return 0;
-
-    while ((c = *str++))
+    while (!nx_field_iterator_end(iter)) {
+        c = (int) nx_field_iterator_octet(iter);
         hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+    }
 
     return hash;
 }
@@ -109,13 +107,13 @@ size_t hash_size(hash_t *h)
 }
 
 
-int hash_insert(hash_t *h, const char *key, void *val)
+int hash_insert(hash_t *h, nx_field_iterator_t *key, void *val)
 {
     unsigned long  idx  = hash_function(key) & h->bucket_mask;
     item_t        *item = DEQ_HEAD(h->buckets[idx].items);
 
     while (item) {
-        if (strcmp(key, item->key) == 0)
+        if (nx_field_iterator_equal(key, item->key))
             break;
         item = item->next;
     }
@@ -132,22 +130,22 @@ int hash_insert(hash_t *h, const char *key, void *val)
     item = DEQ_HEAD(h->item_free_list);
     DEQ_REMOVE_HEAD(h->item_free_list);
 
-    item->key = (char*) malloc(strlen(key) + 1);
-    strcpy(item->key, key);
+    item->key = nx_field_iterator_copy(key);
     item->val = val;
 
     DEQ_INSERT_TAIL(h->buckets[idx].items, item);
+    h->size++;
     return 0;
 }
 
 
-int hash_retrieve(hash_t *h, const char *key, void **val)
+int hash_retrieve(hash_t *h, nx_field_iterator_t *key, void **val)
 {
     unsigned long  idx  = hash_function(key) & h->bucket_mask;
     item_t        *item = DEQ_HEAD(h->buckets[idx].items);
 
     while (item) {
-        if (strcmp(key, item->key) == 0)
+        if (nx_field_iterator_equal(key, item->key))
             break;
         item = item->next;
     }
@@ -161,13 +159,13 @@ int hash_retrieve(hash_t *h, const char *key, void **val)
 }
 
 
-int hash_remove(hash_t *h, const char *key)
+int hash_remove(hash_t *h, nx_field_iterator_t *key)
 {
     unsigned long  idx  = hash_function(key) & h->bucket_mask;
     item_t        *item = DEQ_HEAD(h->buckets[idx].items);
 
     while (item) {
-        if (strcmp(key, item->key) == 0)
+        if (nx_field_iterator_equal(key, item->key))
             break;
         item = item->next;
     }
@@ -176,6 +174,7 @@ int hash_remove(hash_t *h, const char *key)
         free(item->key);
         DEQ_REMOVE(h->buckets[idx].items, item);
         DEQ_INSERT_TAIL(h->item_free_list, item);
+        h->size--;
         return 0;
     }
 

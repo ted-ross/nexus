@@ -98,7 +98,7 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery)
 
     nx_field_iterator_t *iter = nx_message_field_to(msg);
     if (iter) {
-        nx_field_iterator_reset(iter, ITER_VIEW_NODE_ID);
+        nx_field_iterator_reset(iter, ITER_VIEW_NODE_SPECIFIC);
         printf("TO: ");
         unsigned char c;
         while (!nx_field_iterator_end(iter)) {
