@@ -52,7 +52,6 @@ static nx_allocator_t *nx_get_allocator(void)
 
     if (!alloc) {
         alloc = NEW(nx_allocator_t);
-        printf("Created thread-local allocator\n");
 
         if (!alloc)
             return 0;
@@ -315,7 +314,6 @@ void nx_allocator_initialize(const nx_allocator_config_t *c)
     int          i;
     nx_buffer_t *buf;
 
-    printf("[NX_MESSAGE - Pre-allocating %ld buffers]\n", config->buffer_preallocation_count);
     for (i = 0; i < config->buffer_preallocation_count; i++) {
         buf = (nx_buffer_t*) malloc (sizeof(nx_buffer_t) + config->buffer_size);
         DEQ_INSERT_TAIL(global.buffer_free_list, buf);

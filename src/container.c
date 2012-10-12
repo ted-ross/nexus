@@ -191,9 +191,9 @@ int container_handler(void* unused, pn_connection_t *conn)
 
     // initialize the connection if it's new
     if (pn_connection_state(conn) & PN_LOCAL_UNINIT) {
-        printf("[Container: Connection Opened - container=%s hostname=%s]\n",
-               pn_connection_remote_container(conn),
-               pn_connection_remote_hostname(conn));
+        //printf("[Container: Connection Opened - container=%s hostname=%s]\n",
+        //       pn_connection_remote_container(conn),
+        //       pn_connection_remote_hostname(conn));
         pn_connection_open(conn);
         event_count++;
     }
@@ -202,7 +202,7 @@ int container_handler(void* unused, pn_connection_t *conn)
     ssn = pn_session_head(conn, PN_LOCAL_UNINIT);
     while (ssn) {
         pn_session_open(ssn);
-        printf("[Container: Session Opened]\n");
+        //printf("[Container: Session Opened]\n");
         ssn = pn_session_next(ssn, PN_LOCAL_UNINIT);
         event_count++;
     }
@@ -256,7 +256,7 @@ int container_handler(void* unused, pn_connection_t *conn)
     // teardown any terminating links
     link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
     while (link) {
-        printf("[Container: Link Closed - name=%s]\n", pn_link_name(link));
+        //printf("[Container: Link Closed - name=%s]\n", pn_link_name(link));
         nx_link_item_t   *item = (nx_link_item_t*) pn_link_get_context(link);
         container_node_t *node = (container_node_t*) item->container_context;
         if (node)
@@ -269,7 +269,7 @@ int container_handler(void* unused, pn_connection_t *conn)
     // teardown any terminating sessions
     ssn = pn_session_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
     while (ssn) {
-        printf("[Container: Session Closed]\n");
+        //printf("[Container: Session Closed]\n");
         pn_session_close(ssn);
         ssn = pn_session_next(ssn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
         event_count++;
@@ -277,7 +277,7 @@ int container_handler(void* unused, pn_connection_t *conn)
 
     // teardown the connection if it's terminating
     if (pn_connection_state(conn) == (PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED)) {
-        printf("[Container: Connection Closed]\n");
+        //printf("[Container: Connection Closed]\n");
         pn_connection_close(conn);
         event_count++;
     }

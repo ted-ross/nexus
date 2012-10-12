@@ -80,7 +80,7 @@ static void thread_process_listeners(pn_driver_t *driver)
     context_t      *ctx;
 
     while (listener) {
-        printf("[Accepting Connection]\n");
+        //printf("[Accepting Connection]\n");
         conn = pn_listener_accept(listener);
         ctx = context(CONN_STATE_AUTHENTICATING, conn);
         pn_connector_set_context(conn, ctx);
