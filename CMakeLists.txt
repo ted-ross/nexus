@@ -54,7 +54,6 @@ set(container_SOURCES
     src/link_allocator.c
     src/message.c
     src/hash.c
-    src/agent.c
     src/basic_queue.c
     src/router/router_node.c
     src/router/router_control.c

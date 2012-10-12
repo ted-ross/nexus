@@ -94,43 +94,45 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery, void *link
     //
     sys_mutex_lock(router->lock);
     msg = nx_message_receive(delivery);
-    if (msg)
-        valid_message = nx_message_check(msg);
     sys_mutex_unlock(router->lock);
 
     if (!msg)
         return;
 
-    nx_field_iterator_t *iter = nx_message_field_to(msg);
-    nx_router_link_t    *rlink;
-    if (iter) {
-        nx_field_iterator_reset(iter, ITER_VIEW_NODE_SPECIFIC);
-        printf("Received message to: ");
-        unsigned char c;
-        while (!nx_field_iterator_end(iter)) {
-            c = nx_field_iterator_octet(iter);
-            printf("%c", c);
-        }
-        printf("\n");
-
-        nx_field_iterator_reset(iter, ITER_VIEW_NODE_SPECIFIC);
-        sys_mutex_lock(router->lock);
-        int result = hash_retrieve(router->out_hash, iter, (void*) &rlink);
-        sys_mutex_unlock(router->lock);
-        nx_field_iterator_free(iter);
-
-        if (result == 0) {
-            DEQ_INSERT_TAIL(rlink->out_fifo, msg);
-            pn_link_offered(rlink->link, DEQ_SIZE(rlink->out_fifo));
-        }
-    }
+    valid_message = nx_message_check(msg);
 
     pn_link_advance(link);
     pn_link_flow(link, 1);
-    if (valid_message)
+    if (valid_message) {
+        nx_field_iterator_t *iter = nx_message_field_to(msg);
+        nx_router_link_t    *rlink;
+        if (iter) {
+            nx_field_iterator_reset(iter, ITER_VIEW_NODE_SPECIFIC);
+            printf("Received message to: ");
+            unsigned char c;
+            while (!nx_field_iterator_end(iter)) {
+                c = nx_field_iterator_octet(iter);
+                printf("%c", c);
+            }
+            printf("\n");
+
+            nx_field_iterator_reset(iter, ITER_VIEW_NODE_SPECIFIC);
+            sys_mutex_lock(router->lock);
+            int result = hash_retrieve(router->out_hash, iter, (void*) &rlink);
+            nx_field_iterator_free(iter);
+
+            if (result == 0) {
+                DEQ_INSERT_TAIL(rlink->out_fifo, msg);
+                pn_link_offered(rlink->link, DEQ_SIZE(rlink->out_fifo));
+            }
+
+            sys_mutex_unlock(router->lock);
+        }
+
         pn_delivery_update(delivery, PN_ACCEPTED);
-    else
+    } else
         pn_delivery_update(delivery, PN_REJECTED);
+
     pn_delivery_settle(delivery);
 }
 
@@ -144,7 +146,7 @@ static void router_disp_handler(void* context, pn_delivery_t *delivery, void *li
 }
 
 
-static void router_incoming_link_handler(void* context, pn_link_t *link)
+static int router_incoming_link_handler(void* context, pn_link_t *link)
 {
     nx_router_t    *router = (nx_router_t*) context;
     const char     *name   = pn_link_name(link);
@@ -167,10 +169,11 @@ static void router_incoming_link_handler(void* context, pn_link_t *link)
         pn_link_close(link);
     }
     sys_mutex_unlock(router->lock);
+    return 0;
 }
 
 
-static void router_outgoing_link_handler(void* context, pn_link_t *link)
+static int router_outgoing_link_handler(void* context, pn_link_t *link)
 {
     nx_router_t    *router = (nx_router_t*) context;
     const char     *name   = pn_link_name(link);
@@ -195,15 +198,16 @@ static void router_outgoing_link_handler(void* context, pn_link_t *link)
         pn_terminus_copy(pn_link_target(link), pn_link_remote_target(link));
         pn_link_open(link);
         sys_mutex_unlock(router->lock);
-        return;
+        return 0;
     }
 
     pn_link_close(link);
     sys_mutex_unlock(router->lock);
+    return 0;
 }
 
 
-static void router_writable_link_handler(void* context, pn_link_t *link)
+static int router_writable_link_handler(void* context, pn_link_t *link)
 {
     nx_router_t   *router = (nx_router_t*) context;
     int            grant_delivery = 0;
@@ -221,12 +225,15 @@ static void router_writable_link_handler(void* context, pn_link_t *link)
         if (delivery) {
             void *link_context = container_get_link_context(link);
             router_tx_handler(context, delivery, link_context);
+            return 1;
         }
     }
+
+    return 0;
 }
 
 
-static void router_link_closed_handler(void* context, pn_link_t *link)
+static int router_link_closed_handler(void* context, pn_link_t *link)
 {
     nx_router_t    *router = (nx_router_t*) context;
     const char     *name   = pn_link_name(link);
@@ -257,6 +264,7 @@ static void router_link_closed_handler(void* context, pn_link_t *link)
     }
 
     sys_mutex_unlock(router->lock);
+    return 0;
 }
 
 

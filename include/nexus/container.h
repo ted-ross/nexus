@@ -23,7 +23,7 @@
 
 typedef struct container_node_t container_node_t;
 typedef void (*container_delivery_handler_t)(void* context, pn_delivery_t *delivery, void *link_context);
-typedef void (*container_link_handler_t)    (void* context, pn_link_t     *link);
+typedef int  (*container_link_handler_t)    (void* context, pn_link_t     *link);
 
 typedef struct {
     char                         *name;

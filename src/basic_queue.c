@@ -141,7 +141,7 @@ static void bq_disp_handler(void* context, pn_delivery_t *delivery, void *link_c
 }
 
 
-static void bq_incoming_link_handler(void* context, pn_link_t *link)
+static int bq_incoming_link_handler(void* context, pn_link_t *link)
 {
     basic_queue_t  *bq    = (basic_queue_t*) context;
     const char     *name  = pn_link_name(link);
@@ -164,10 +164,11 @@ static void bq_incoming_link_handler(void* context, pn_link_t *link)
         pn_link_close(link);
     }
     sys_mutex_unlock(bq->lock);
+    return 0;
 }
 
 
-static void bq_outgoing_link_handler(void* context, pn_link_t *link)
+static int bq_outgoing_link_handler(void* context, pn_link_t *link)
 {
     basic_queue_t  *bq = (basic_queue_t*) context;
     const char     *name  = pn_link_name(link);
@@ -189,10 +190,11 @@ static void bq_outgoing_link_handler(void* context, pn_link_t *link)
         pn_link_close(link);
     }
     sys_mutex_unlock(bq->lock);
+    return 0;
 }
 
 
-static void bq_writable_link_handler(void* context, pn_link_t *link)
+static int bq_writable_link_handler(void* context, pn_link_t *link)
 {
     basic_queue_t *bq = (basic_queue_t*) context;
     int            grant_delivery = 0;
@@ -209,12 +211,14 @@ static void bq_writable_link_handler(void* context, pn_link_t *link)
         if (delivery) {
             void *link_context = container_get_link_context(link);
             bq_tx_handler(context, delivery, link_context);
+            return 1;
         }
     }
+    return 0;
 }
 
 
-static void bq_link_closed_handler(void* context, pn_link_t *link)
+static int bq_link_closed_handler(void* context, pn_link_t *link)
 {
     basic_queue_t  *bq = (basic_queue_t*) context;
     const char     *name  = pn_link_name(link);
@@ -245,6 +249,7 @@ static void bq_link_closed_handler(void* context, pn_link_t *link)
     }
 
     sys_mutex_unlock(bq->lock);
+    return 0;
 }
 
 

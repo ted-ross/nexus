@@ -112,17 +112,17 @@ static void container_setup_incoming_link(pn_link_t *link)
 }
 
 
-static void container_do_writable(pn_link_t *link)
+static int container_do_writable(pn_link_t *link)
 {
     nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
     if (!item)
-        return;
+        return 0;
 
     container_node_t *node = (container_node_t*) item->container_context;
     if (!node)
-        return;
+        return 0;
 
-    node->desc.writable_handler(node->desc.context, link);
+    return node->desc.writable_handler(node->desc.context, link);
 }
 
 
@@ -245,7 +245,7 @@ int container_handler(void* unused, pn_connection_t *conn)
     while (link) {
         assert(pn_session_connection(pn_link_session(link)) == conn);
         if (pn_link_is_sender(link) && pn_link_credit(link) > 0)
-            container_do_writable(link);
+            event_count += container_do_writable(link);
         link = pn_link_next(link, PN_LOCAL_ACTIVE | PN_REMOTE_ACTIVE);
     }
 

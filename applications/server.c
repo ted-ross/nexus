@@ -22,7 +22,6 @@
 #include <nexus/server.h>
 #include <nexus/container.h>
 #include <nexus/link_allocator.h>
-#include <nexus/agent.h>
 #include <nexus/basic_queue.h>
 #include <nexus/router.h>
 
@@ -36,7 +35,6 @@ int main(int argc, char **argv)
 {
     nx_link_allocator_initialize();
     container_init();
-    agent_initialize();
 
     nx_server_initialize(4, container_handler, thread_start_handler, 0);
 
