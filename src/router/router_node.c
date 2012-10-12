@@ -72,7 +72,9 @@ static void router_tx_handler(void* context, pn_delivery_t *delivery, void *link
         buf = DEQ_HEAD(msg->buffers);
     }
 
-    nx_free_message(msg);
+    pn_delivery_set_context(delivery, (void*) msg);
+    msg->out_delivery = delivery;
+
     size = (DEQ_SIZE(rlink->out_fifo));
     sys_mutex_unlock(router->lock);
 
@@ -119,19 +121,44 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery, void *link
 
             sys_mutex_unlock(router->lock);
         }
-
-        pn_delivery_update(delivery, PN_ACCEPTED);
-    } else
+    } else {
         pn_delivery_update(delivery, PN_REJECTED);
-
-    pn_delivery_settle(delivery);
+        pn_delivery_settle(delivery);
+    }
 }
 
 
 static void router_disp_handler(void* context, pn_delivery_t *delivery, void *link_context)
 {
-    //nx_router_t *router = (nx_router_t*) context;
-    //pn_link_t     *link = pn_link(delivery);
+    pn_link_t *link = pn_delivery_link(delivery);
+
+    if (pn_link_is_sender(link)) {
+        pn_disposition_t  disp = pn_delivery_remote_state(delivery);
+        nx_message_t     *msg  = pn_delivery_get_context(delivery);
+        pn_delivery_t    *activate = 0;
+
+        if (msg) {
+            assert(delivery == msg->out_delivery);
+            if (disp != 0) {
+                activate = msg->in_delivery;
+                pn_delivery_update(msg->in_delivery, disp);
+                // TODO - handling of the data accompanying RECEIVED/MODIFIED
+            }
+
+            if (pn_delivery_settled(delivery)) {
+                activate = msg->in_delivery;
+                pn_delivery_settle(msg->in_delivery);
+                pn_delivery_settle(delivery);
+                nx_free_message(msg);
+            }
+
+            if (activate) {
+                // TODO - Activate the connector associated with msg->in_delivery (aka activate)
+            }
+
+            return;
+        }
+    }
 
     pn_delivery_settle(delivery);
 }
