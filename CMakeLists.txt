@@ -20,7 +20,7 @@
 cmake_minimum_required(VERSION 2.6)
 set(CMAKE_C_FLAGS "-pthread -Wall -Werror")
 
-project(pc)
+project(nexus C)
 find_library(proton_lib qpid-proton)
 find_library(pthread_lib pthread)
 find_path(proton_include proton/driver.h)
