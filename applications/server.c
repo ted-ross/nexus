@@ -41,7 +41,7 @@ int main(int argc, char **argv)
     basic_queue_t *queue1 = basic_queue("queue1", 0);
     basic_queue_t *queue2 = basic_queue("queue2", 0);
     basic_queue_t *queue3 = basic_queue("queue3", 0);
-    nx_router_t   *router = nx_router("domain.com", 0);
+    nx_router_t   *router = nx_router("maas", 0);
 
     nx_server_run();
 

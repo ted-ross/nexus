@@ -432,6 +432,31 @@ void nx_server_run(void)
 }
 
 
+void nx_server_activate(pn_link_t *link)
+{
+    if (!link)
+        return;
+
+    pn_session_t *sess = pn_link_session(link);
+    if (!sess)
+        return;
+
+    pn_connection_t *conn = pn_session_connection(sess);
+    if (!conn)
+        return;
+
+    context_t *ctx = pn_connection_get_context(conn);
+    if (!ctx)
+        return;
+
+    pn_connector_t *ctor = context_get_connector(ctx);
+    if (!ctor)
+        return;
+
+    pn_connector_activate(ctor, PN_CONNECTOR_WRITABLE);
+}
+
+
 void nx_server_timer_pending_LH(nx_timer_t *timer)
 {
     DEQ_INSERT_TAIL(nx_server->pending_timers, timer);

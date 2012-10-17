@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <nexus/router.h>
+#include <nexus/server.h>
 #include <nexus/message.h>
 #include <nexus/link_allocator.h>
 #include <nexus/threading.h>
@@ -117,6 +118,7 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery, void *link
             if (result == 0) {
                 DEQ_INSERT_TAIL(rlink->out_fifo, msg);
                 pn_link_offered(rlink->link, DEQ_SIZE(rlink->out_fifo));
+                nx_server_activate(rlink->link);
             }
 
             sys_mutex_unlock(router->lock);
@@ -153,7 +155,7 @@ static void router_disp_handler(void* context, pn_delivery_t *delivery, void *li
             }
 
             if (activate) {
-                // TODO - Activate the connector associated with msg->in_delivery (aka activate)
+                nx_server_activate(pn_delivery_link(msg->in_delivery));
             }
 
             return;

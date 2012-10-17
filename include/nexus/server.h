@@ -31,4 +31,6 @@ void nx_server_initialize(int                   thread_count,
 void nx_server_finalize(void);
 void nx_server_run(void);
 
+void nx_server_activate(pn_link_t *link);
+
 #endif
