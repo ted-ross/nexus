@@ -218,7 +218,7 @@ static int bq_writable_link_handler(void* context, pn_link_t *link)
 }
 
 
-static int bq_link_closed_handler(void* context, pn_link_t *link)
+static int bq_link_detach_handler(void* context, pn_link_t *link, int closed)
 {
     basic_queue_t  *bq = (basic_queue_t*) context;
     const char     *name  = pn_link_name(link);
@@ -265,7 +265,7 @@ basic_queue_t *basic_queue(char *name, basic_queue_configuration_t *config)
     bq->desc.incoming_handler    = bq_incoming_link_handler;
     bq->desc.outgoing_handler    = bq_outgoing_link_handler;
     bq->desc.writable_handler    = bq_writable_link_handler;
-    bq->desc.link_closed_handler = bq_link_closed_handler;
+    bq->desc.link_detach_handler = bq_link_detach_handler;
 
     bq->node = container_register_node(bq->desc);
     if (!bq->node) {

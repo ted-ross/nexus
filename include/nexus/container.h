@@ -22,22 +22,24 @@
 #include <proton/engine.h>
 
 typedef struct container_node_t container_node_t;
-typedef void (*container_delivery_handler_t)(void* context, pn_delivery_t *delivery, void *link_context);
-typedef int  (*container_link_handler_t)    (void* context, pn_link_t     *link);
+typedef void (*container_delivery_handler_t)    (void* context, pn_delivery_t *delivery, void *link_context);
+typedef int  (*container_link_handler_t)        (void* context, pn_link_t *link);
+typedef int  (*container_link_detach_handler_t) (void* context, pn_link_t *link, int closed);
 
 typedef struct {
-    char                         *name;
-    void                         *context;
-    container_delivery_handler_t  rx_handler;
-    container_delivery_handler_t  tx_handler;
-    container_delivery_handler_t  disp_handler;
-    container_link_handler_t      incoming_handler;
-    container_link_handler_t      outgoing_handler;
-    container_link_handler_t      writable_handler;
-    container_link_handler_t      link_closed_handler;
+    char                            *name;
+    void                            *context;
+    container_delivery_handler_t     rx_handler;
+    container_delivery_handler_t     tx_handler;
+    container_delivery_handler_t     disp_handler;
+    container_link_handler_t         incoming_handler;
+    container_link_handler_t         outgoing_handler;
+    container_link_handler_t         writable_handler;
+    container_link_detach_handler_t  link_detach_handler;
 } node_descriptor_t;
 
 void container_init(void);
+int  container_close_handler(void* context, pn_connection_t *conn);
 int  container_handler(void* context, pn_connection_t *conn);
 
 container_node_t *container_register_node(node_descriptor_t desc);

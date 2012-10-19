@@ -26,6 +26,7 @@ typedef int  (*nx_conn_handler_cb_t)(void* context, pn_connection_t *conn);
 
 void nx_server_initialize(int                   thread_count,
                           nx_conn_handler_cb_t  handler,
+                          nx_conn_handler_cb_t  close_handler,
                           nx_thread_start_cb_t  start_cb,
                           void                 *handler_context);
 void nx_server_finalize(void);

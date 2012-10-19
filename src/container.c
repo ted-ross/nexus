@@ -179,6 +179,36 @@ static void container_do_updated(pn_delivery_t *delivery)
 }
 
 
+int container_close_handler(void* unused, pn_connection_t *conn)
+{
+    //
+    // Close all links, passing False as the 'closed' argument.  These links are not
+    // being properly 'detached'.  They are being orphaned.
+    //
+    pn_link_t *link = pn_link_head(conn, 0);
+    while (link) {
+        printf("[Container: Link Orphaned - name=%s]\n", pn_link_name(link));
+        nx_link_item_t   *item = (nx_link_item_t*) pn_link_get_context(link);
+        container_node_t *node = (container_node_t*) item->container_context;
+        if (node)
+            node->desc.link_detach_handler(node->desc.context, link, 0);
+        pn_link_close(link);
+        link = pn_link_next(link, 0);
+    }
+
+    // teardown all sessions
+    pn_session_t *ssn = pn_session_head(conn, 0);
+    while (ssn) {
+        pn_session_close(ssn);
+        ssn = pn_session_next(ssn, 0);
+    }
+
+    // teardown the connection
+    pn_connection_close(conn);
+    return 0;
+}
+
+
 int container_handler(void* unused, pn_connection_t *conn)
 {
     pn_session_t    *ssn;
@@ -260,7 +290,7 @@ int container_handler(void* unused, pn_connection_t *conn)
         nx_link_item_t   *item = (nx_link_item_t*) pn_link_get_context(link);
         container_node_t *node = (container_node_t*) item->container_context;
         if (node)
-            node->desc.link_closed_handler(node->desc.context, link);
+            node->desc.link_detach_handler(node->desc.context, link, 1); // TODO - get 'closed' from detach message
         pn_link_close(link);
         link = pn_link_next(link, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
         event_count++;
@@ -305,7 +335,7 @@ container_node_t *container_register_node(node_descriptor_t desc)
         node->desc.incoming_handler    = desc.incoming_handler;
         node->desc.outgoing_handler    = desc.outgoing_handler;
         node->desc.writable_handler    = desc.writable_handler;
-        node->desc.link_closed_handler = desc.link_closed_handler;
+        node->desc.link_detach_handler = desc.link_detach_handler;
     }
     sys_mutex_unlock(lock);
     nx_field_iterator_free(iter);

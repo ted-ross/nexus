@@ -154,9 +154,8 @@ static void router_disp_handler(void* context, pn_delivery_t *delivery, void *li
                 nx_free_message(msg);
             }
 
-            if (activate) {
-                nx_server_activate(pn_delivery_link(msg->in_delivery));
-            }
+            if (activate)
+                nx_server_activate(pn_delivery_link(activate));
 
             return;
         }
@@ -241,7 +240,7 @@ static int router_writable_link_handler(void* context, pn_link_t *link)
 }
 
 
-static int router_link_closed_handler(void* context, pn_link_t *link)
+static int router_link_detach_handler(void* context, pn_link_t *link, int closed)
 {
     nx_router_t    *router = (nx_router_t*) context;
     const char     *r_tgt  = pn_terminus_get_address(pn_link_remote_target(link));
@@ -300,7 +299,7 @@ nx_router_t *nx_router(char *name, nx_router_configuration_t *config)
     router->desc.incoming_handler    = router_incoming_link_handler;
     router->desc.outgoing_handler    = router_outgoing_link_handler;
     router->desc.writable_handler    = router_writable_link_handler;
-    router->desc.link_closed_handler = router_link_closed_handler;
+    router->desc.link_detach_handler = router_link_detach_handler;
 
     router->node = container_register_node(router->desc);
     if (!router->node) {

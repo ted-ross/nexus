@@ -42,6 +42,7 @@ typedef struct nx_server_t {
     pn_driver_t           *driver;
     nx_thread_start_cb_t   start_handler;
     nx_conn_handler_cb_t   handler;
+    nx_conn_handler_cb_t   close_handler;
     void                  *handler_context;
     sys_cond_t            *cond;
     sys_mutex_t           *lock;
@@ -272,8 +273,14 @@ static void *thread_run(void *arg)
                         events = 0;
                     }
                 }
-                else if (context_get_state(ctx) == CONN_STATE_OPERATIONAL)
-                    events = nx_server->handler(nx_server->handler_context, pn_connector_connection(work));
+                else if (context_get_state(ctx) == CONN_STATE_OPERATIONAL) {
+                    if (pn_connector_closed(work)) {
+                        nx_server->close_handler(nx_server->handler_context, pn_connector_connection(work));
+                        events = 0;
+                    }
+                    else
+                        events = nx_server->handler(nx_server->handler_context, pn_connector_connection(work));
+                }
             } while (events > 0);
 
             //
@@ -354,6 +361,7 @@ static void thread_free(nx_thread_t *thread)
 
 void nx_server_initialize(int                   thread_count,
                           nx_conn_handler_cb_t  handler,
+                          nx_conn_handler_cb_t  close_handler,
                           nx_thread_start_cb_t  start_cb,
                           void                 *handler_context)
 {
@@ -371,6 +379,7 @@ void nx_server_initialize(int                   thread_count,
     nx_server->driver          = pn_driver();
     nx_server->start_handler   = start_cb;
     nx_server->handler         = handler;
+    nx_server->close_handler   = close_handler;
     nx_server->handler_context = handler_context;
     nx_server->lock            = sys_mutex();
     nx_server->cond            = sys_cond();
