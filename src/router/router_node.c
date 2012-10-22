@@ -119,6 +119,9 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery, void *link
                 DEQ_INSERT_TAIL(rlink->out_fifo, msg);
                 pn_link_offered(rlink->link, DEQ_SIZE(rlink->out_fifo));
                 nx_server_activate(rlink->link);
+            } else {
+                pn_delivery_update(delivery, PN_RELEASED);
+                pn_delivery_settle(delivery);
             }
 
             sys_mutex_unlock(router->lock);
@@ -205,6 +208,7 @@ static int router_outgoing_link_handler(void* context, pn_link_t *link)
         pn_terminus_copy(pn_link_target(link), pn_link_remote_target(link));
         pn_link_open(link);
         sys_mutex_unlock(router->lock);
+        printf("[Router - Registered new local address: %s]\n", r_tgt);
         return 0;
     }
 
@@ -253,6 +257,7 @@ static int router_link_detach_handler(void* context, pn_link_t *link, int closed
         nx_field_iterator_t *iter = nx_field_iterator_string(r_tgt, ITER_VIEW_NO_HOST);
         hash_remove(router->out_hash, iter);
         nx_field_iterator_free(iter);
+        printf("[Router - Removed local address: %s]\n", r_tgt);
     }
     else
         item = DEQ_HEAD(router->in_links);

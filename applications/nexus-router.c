@@ -26,7 +26,7 @@
 
 static void thread_start_handler(void* context, int thread_id)
 {
-    printf("[Thread Started - id=%d]\n", thread_id);
+    //printf("[Thread Started - id=%d]\n", thread_id);
 }
 
 
