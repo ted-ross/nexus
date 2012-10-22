@@ -66,12 +66,12 @@ target_link_libraries(nexus-container nexus-server ${proton_lib})
 ##
 ## Build the server application
 ##
-set(app_SOURCES
-    applications/server.c
+set(router_SOURCES
+    applications/nexus-router.c
     )
 
-add_executable(nexus ${app_SOURCES})
-target_link_libraries(nexus nexus-container)
+add_executable(nexus-router ${router_SOURCES})
+target_link_libraries(nexus-router nexus-container)
 
 ##
 ## Build test applications

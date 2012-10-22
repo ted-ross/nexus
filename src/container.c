@@ -33,8 +33,9 @@ struct container_node_t {
     node_descriptor_t desc;
 };
 
-static hash_t      *node_map;
-static sys_mutex_t *lock;
+static hash_t           *node_map;
+static sys_mutex_t      *lock;
+static container_node_t *default_node;
 
 void container_init(void)
 {
@@ -45,6 +46,7 @@ void container_init(void)
 
     node_map = hash_initialize(10, 32); // 1K buckets, item batches of 32
     lock = sys_mutex();
+    default_node = 0;
 }
 
 
@@ -66,10 +68,14 @@ static void container_setup_outgoing_link(pn_link_t *link)
     sys_mutex_unlock(lock);
 
     if (result < 0) {
-        // Reject the link
-        // TODO - When the API allows, add an error message for "no available node"
-        pn_link_close(link);
-        return;
+        if (default_node)
+            node = default_node;
+        else {
+            // Reject the link
+            // TODO - When the API allows, add an error message for "no available node"
+            pn_link_close(link);
+            return;
+        }
     }
 
     nx_link_item_t *item = nx_link_item(link);
@@ -98,10 +104,14 @@ static void container_setup_incoming_link(pn_link_t *link)
     sys_mutex_unlock(lock);
 
     if (result < 0) {
-        // Reject the link
-        // TODO - When the API allows, add an error message for "no available node"
-        pn_link_close(link);
-        return;
+        if (default_node)
+            node = default_node;
+        else {
+            // Reject the link
+            // TODO - When the API allows, add an error message for "no available node"
+            pn_link_close(link);
+            return;
+        }
     }
 
     nx_link_item_t *item = nx_link_item(link);
@@ -187,7 +197,6 @@ int container_close_handler(void* unused, pn_connection_t *conn)
     //
     pn_link_t *link = pn_link_head(conn, 0);
     while (link) {
-        printf("[Container: Link Orphaned - name=%s]\n", pn_link_name(link));
         nx_link_item_t   *item = (nx_link_item_t*) pn_link_get_context(link);
         container_node_t *node = (container_node_t*) item->container_context;
         if (node)
@@ -318,42 +327,54 @@ int container_handler(void* unused, pn_connection_t *conn)
 
 container_node_t *container_register_node(node_descriptor_t desc)
 {
-    container_node_t    *node = NEW(container_node_t);
-    nx_field_iterator_t *iter = nx_field_iterator_string(desc.name, ITER_VIEW_ALL);
+    container_node_t *node = NEW(container_node_t);
+    node->desc.name = (char*) malloc(strlen(desc.name) + 1);
+    strcpy(node->desc.name, desc.name);
+    node->desc.context             = desc.context;
+    node->desc.rx_handler          = desc.rx_handler;
+    node->desc.tx_handler          = desc.tx_handler;
+    node->desc.disp_handler        = desc.disp_handler;
+    node->desc.incoming_handler    = desc.incoming_handler;
+    node->desc.outgoing_handler    = desc.outgoing_handler;
+    node->desc.writable_handler    = desc.writable_handler;
+    node->desc.link_detach_handler = desc.link_detach_handler;
 
-    sys_mutex_lock(lock);
-    if (hash_insert(node_map, iter, node) < 0) {
-        free(node);
-        node = 0;
+    if (strcmp("*", desc.name) == 0) {
+        default_node = node;
+        printf("[Container: Default Node Registered]\n");
     } else {
-        node->desc.name = (char*) malloc(strlen(desc.name) + 1);
-        strcpy(node->desc.name, desc.name);
-        node->desc.context             = desc.context;
-        node->desc.rx_handler          = desc.rx_handler;
-        node->desc.tx_handler          = desc.tx_handler;
-        node->desc.disp_handler        = desc.disp_handler;
-        node->desc.incoming_handler    = desc.incoming_handler;
-        node->desc.outgoing_handler    = desc.outgoing_handler;
-        node->desc.writable_handler    = desc.writable_handler;
-        node->desc.link_detach_handler = desc.link_detach_handler;
+        nx_field_iterator_t *iter = nx_field_iterator_string(desc.name, ITER_VIEW_ALL);
+        sys_mutex_lock(lock);
+        if (hash_insert(node_map, iter, node) < 0) {
+            free(node->desc.name);
+            free(node);
+            node = 0;
+        }
+        sys_mutex_unlock(lock);
+        nx_field_iterator_free(iter);
+        printf("[Container: Node Registered - %s]\n", desc.name);
     }
-    sys_mutex_unlock(lock);
-    nx_field_iterator_free(iter);
-    printf("[Container: Node Registered - %s]\n", desc.name);
+
     return node;
 }
 
 
 int container_unregister_node(container_node_t *node)
 {
-    nx_field_iterator_t *iter = nx_field_iterator_string(node->desc.name, ITER_VIEW_ALL);
+    int result;
 
-    sys_mutex_lock(lock);
-    int result = hash_remove(node_map, iter);
-    sys_mutex_unlock(lock);
+    if (strcmp("*", node->desc.name) == 0)
+        default_node = 0;
+    else {
+        nx_field_iterator_t *iter = nx_field_iterator_string(node->desc.name, ITER_VIEW_ALL);
+        sys_mutex_lock(lock);
+        result = hash_remove(node_map, iter);
+        sys_mutex_unlock(lock);
+        nx_field_iterator_free(iter);
+    }
+
     free(node->desc.name);
     free(node);
-    nx_field_iterator_free(iter);
     return result;
 }
 

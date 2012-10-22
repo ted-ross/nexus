@@ -35,6 +35,13 @@ typedef struct nx_field_iterator_t nx_field_iterator_t;
  *
  * ITER_VIEW_ALL - No transformation of the raw field data
  *
+ * ITER_VIEW_NO_HOST - Remove the scheme and host fields from the view
+ *
+ *    amqp://host.domain.com:port/node-id/node/specific
+ *                                ^^^^^^^^^^^^^^^^^^^^^
+ *    node-id/node/specific
+ *    ^^^^^^^^^^^^^^^^^^^^^
+ *
  * ITER_VIEW_NODE_ID - Isolate the node identifier from an address
  *
  *    amqp://host.domain.com:port/node-id/node/specific
@@ -51,6 +58,7 @@ typedef struct nx_field_iterator_t nx_field_iterator_t;
  */
 typedef enum {
     ITER_VIEW_ALL,
+    ITER_VIEW_NO_HOST,
     ITER_VIEW_NODE_ID,
     ITER_VIEW_NODE_SPECIFIC
 } nx_iterator_view_t;

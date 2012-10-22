@@ -127,6 +127,11 @@ static void view_initialize(nx_field_iterator_t *iter)
         return;
     }
 
+    if (iter->view == ITER_VIEW_NO_HOST) {
+        iter->mode = MODE_TO_END;
+        return;
+    }
+
     if (iter->view == ITER_VIEW_NODE_SPECIFIC) {
         iter->mode = MODE_TO_END;
         while (!nx_field_iterator_end(iter)) {

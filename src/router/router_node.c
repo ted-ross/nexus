@@ -110,7 +110,7 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery, void *link
         nx_field_iterator_t *iter = nx_message_field_to(msg);
         nx_router_link_t    *rlink;
         if (iter) {
-            nx_field_iterator_reset(iter, ITER_VIEW_NODE_SPECIFIC);
+            nx_field_iterator_reset(iter, ITER_VIEW_NO_HOST);
             sys_mutex_lock(router->lock);
             int result = hash_retrieve(router->out_hash, iter, (void*) &rlink);
             nx_field_iterator_free(iter);
@@ -196,7 +196,7 @@ static int router_outgoing_link_handler(void* context, pn_link_t *link)
     DEQ_INIT(rlink->out_fifo);
     container_set_link_context(link, rlink);
 
-    nx_field_iterator_t *iter = nx_field_iterator_string(r_tgt, ITER_VIEW_NODE_SPECIFIC);
+    nx_field_iterator_t *iter = nx_field_iterator_string(r_tgt, ITER_VIEW_NO_HOST);
     int result = hash_insert(router->out_hash, iter, rlink);
     nx_field_iterator_free(iter);
 
@@ -250,7 +250,7 @@ static int router_link_detach_handler(void* context, pn_link_t *link, int closed
     if (pn_link_is_sender(link)) {
         item = DEQ_HEAD(router->out_links);
 
-        nx_field_iterator_t *iter = nx_field_iterator_string(r_tgt, ITER_VIEW_NODE_SPECIFIC);
+        nx_field_iterator_t *iter = nx_field_iterator_string(r_tgt, ITER_VIEW_NO_HOST);
         hash_remove(router->out_hash, iter);
         nx_field_iterator_free(iter);
     }
