@@ -37,6 +37,7 @@ struct nx_router_t {
     sys_mutex_t       *lock;
     nx_timer_t        *timer;
     hash_t            *out_hash;
+    uint64_t           dtag;
 };
 
 
@@ -224,14 +225,17 @@ static int router_writable_link_handler(void* context, pn_link_t *link)
     int               grant_delivery = 0;
     pn_delivery_t    *delivery;
     nx_router_link_t *rlink = (nx_router_link_t*) container_get_link_context(link);
+    uint64_t          tag;
 
     sys_mutex_lock(router->lock);
-    if (DEQ_SIZE(rlink->out_fifo) > 0)
+    if (DEQ_SIZE(rlink->out_fifo) > 0) {
         grant_delivery = 1;
+        tag = router->dtag++;
+    }
     sys_mutex_unlock(router->lock);
 
     if (grant_delivery) {
-        pn_delivery(link, pn_dtag("delivery-xxx", 13)); // TODO - use a unique delivery tag
+        pn_delivery(link, pn_dtag((char*) &tag, 8));
         delivery = pn_link_current(link);
         if (delivery) {
             void *link_context = container_get_link_context(link);
@@ -322,6 +326,7 @@ nx_router_t *nx_router(char *name, nx_router_configuration_t *config)
     nx_timer_schedule(router->timer, 0); // Immediate
 
     router->out_hash = hash_initialize(10, 32);
+    router->dtag = 1;
 
     return router;
 }
