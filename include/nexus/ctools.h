@@ -36,13 +36,13 @@
 
 #define DEQ_LINKS(t) t *prev; t *next
 
-#define DEQ_INIT(d) { d.head = 0; d.tail = 0; d.size = 0; }
+#define DEQ_INIT(d) do { d.head = 0; d.tail = 0; d.size = 0; } while (0)
 #define DEQ_HEAD(d) (d.head)
 #define DEQ_TAIL(d) (d.tail)
 #define DEQ_SIZE(d) (d.size)
 
 #define DEQ_INSERT_HEAD(d,i)      \
-{                                 \
+do {                              \
     if (d.head) {                 \
         (i)->next = d.head;       \
         d.head->prev = i;         \
@@ -54,10 +54,10 @@
     (i)->prev = 0;                \
     d.head = i;                   \
     d.size++;                     \
-}
+} while (0)
 
 #define DEQ_INSERT_TAIL(d,i)      \
-{                                 \
+do {                              \
     if (d.tail) {                 \
         (i)->prev = d.tail;       \
         d.tail->next = i;         \
@@ -69,10 +69,10 @@
     (i)->next = 0;                \
     d.tail = i;                   \
     d.size++;                     \
-}
+} while (0)
 
 #define DEQ_REMOVE_HEAD(d)      \
-{                               \
+do {                            \
     CT_ASSERT(d.head);          \
     if (d.head) {               \
         d.head = d.head->next;  \
@@ -82,10 +82,10 @@
         }                       \
         d.size--;               \
     }                           \
-}
+} while (0)
 
 #define DEQ_REMOVE_TAIL(d)      \
-{                               \
+do {                            \
     CT_ASSERT(d.tail);          \
     if (d.tail) {               \
         d.tail = d.tail->prev;  \
@@ -93,10 +93,10 @@
             d.head = 0;         \
         d.size--;               \
     }                           \
-}
+} while (0)
 
 #define DEQ_INSERT_AFTER(d,i,a) \
-{                               \
+do {                            \
     if ((a)->next)              \
         (a)->next->prev = (i);  \
     else                        \
@@ -105,10 +105,10 @@
     (i)->prev = (a);            \
     (a)->next = (i);            \
     d.size++;                   \
-}
+} while (0)
 
 #define DEQ_REMOVE(d,i)                        \
-{                                              \
+do {                                           \
     if ((i)->next)                             \
         (i)->next->prev = (i)->prev;           \
     else                                       \
@@ -119,6 +119,6 @@
         d.head = (i)->next;                    \
     d.size--;                                  \
     CT_ASSERT(d.size || (!d.head && !d.tail)); \
-}
+} while (0)
 
 #endif

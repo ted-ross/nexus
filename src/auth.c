@@ -46,7 +46,7 @@ void auth_handler(pn_connector_t *cxtr)
 
     if        (state == PN_SASL_PASS) {
         conn = pn_connection();
-        pn_connection_set_container(conn, "nexus-broker"); // TODO - make unique
+        pn_connection_set_container(conn, "nexus"); // TODO - make unique
         pn_connector_set_connection(cxtr, conn);
         context_t *context = (context_t*) pn_connector_context(cxtr);
         context_set_state(context, CONN_STATE_OPERATIONAL);

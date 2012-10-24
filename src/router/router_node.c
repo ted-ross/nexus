@@ -107,6 +107,7 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery, void *link
 
     pn_link_advance(link);
     pn_link_flow(link, 1);
+
     if (valid_message) {
         nx_field_iterator_t *iter = nx_message_field_to(msg);
         nx_router_link_t    *rlink;
@@ -268,11 +269,10 @@ static int router_link_detach_handler(void* context, pn_link_t *link, int closed
 
     while (item) {
         if (item->link == link) {
-            if (pn_link_is_sender(link)) {
+            if (pn_link_is_sender(link))
                 DEQ_REMOVE(router->out_links, item);
-            } else {
+            else
                 DEQ_REMOVE(router->in_links, item);
-            }
             nx_link_item_free(item);
             break;
         }
