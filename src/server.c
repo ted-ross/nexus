@@ -462,7 +462,8 @@ void nx_server_activate(pn_link_t *link)
     if (!ctor)
         return;
 
-    pn_connector_activate(ctor, PN_CONNECTOR_WRITABLE);
+    if (!pn_connector_closed(ctor))
+        pn_connector_activate(ctor, PN_CONNECTOR_WRITABLE);
 }
 
 
