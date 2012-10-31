@@ -208,6 +208,61 @@ static char* test_two_duplicate(void *context)
 }
 
 
+static char* test_separated(void *context)
+{
+    int count;
+
+    while(fire_head());
+    fire_mask = 0;
+
+    nx_timer_schedule(timers[0], 2);
+    nx_timer_schedule(timers[1], 4);
+
+    sys_mutex_lock(lock);
+    nx_timer_visit_LH(time++);
+    nx_timer_visit_LH(time++);
+    sys_mutex_unlock(lock);
+    count = fire_head();
+    if (count < 1) return "First failed to fire";
+    if (count > 1) return "Second fired prematurely";
+    if (fire_mask != 1) return "Incorrect fire mask 1";
+
+    nx_timer_schedule(timers[2], 2);
+    nx_timer_schedule(timers[3], 4);
+
+    sys_mutex_lock(lock);
+    nx_timer_visit_LH(time++);
+    nx_timer_visit_LH(time++);
+    sys_mutex_unlock(lock);
+    count = fire_head();
+    fire_head();
+    if (count < 1) return "Second failed to fire";
+    if (count < 2) return "Third failed to fire";
+    if (fire_mask != 7)  return "Incorrect fire mask 7";
+
+    sys_mutex_lock(lock);
+    nx_timer_visit_LH(time++);
+    nx_timer_visit_LH(time++);
+    sys_mutex_unlock(lock);
+    count = fire_head();
+    if (count < 1) return "Fourth failed to fire";
+    if (fire_mask != 15) return "Incorrect fire mask 15";
+
+    sys_mutex_lock(lock);
+    nx_timer_visit_LH(time++);
+    nx_timer_visit_LH(time++);
+    nx_timer_visit_LH(time++);
+    nx_timer_visit_LH(time++);
+    nx_timer_visit_LH(time++);
+    nx_timer_visit_LH(time++);
+    sys_mutex_unlock(lock);
+    count = fire_head();
+    if (count > 0) return "Spurious fire";
+
+    return 0;
+}
+
+
 static char* test_big(void *context)
 {
     while(fire_head());
@@ -289,6 +344,7 @@ int main(int argc, char **argv)
     TEST_CASE(test_two_inorder, 0);
     TEST_CASE(test_two_reverse, 0);
     TEST_CASE(test_two_duplicate, 0);
+    TEST_CASE(test_separated, 0);
     TEST_CASE(test_big, 0);
 
     int i;
