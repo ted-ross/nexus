@@ -361,7 +361,7 @@ container_node_t *container_register_node(node_descriptor_t desc)
 
 int container_unregister_node(container_node_t *node)
 {
-    int result;
+    int result = 0;
 
     if (strcmp("*", node->desc.name) == 0)
         default_node = 0;

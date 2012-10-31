@@ -252,7 +252,7 @@ static void *thread_run(void *arg)
         //
         if (work) {
             ctx = pn_connector_context(work);
-            int events;
+            int events = 0;
             int auth_passes = 0;
 
             do {
