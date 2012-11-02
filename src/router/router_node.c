@@ -291,7 +291,6 @@ static void nx_router_timer_handler(void *context)
     //
     // Periodic processing.
     //
-
     nx_timer_schedule(router->timer, 1000);
 }
 

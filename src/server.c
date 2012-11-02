@@ -51,6 +51,8 @@ typedef struct nx_server_t {
     nx_timer_list_t        pending_timers;
     bool                   a_thread_is_waiting;
     int                    threads_active;
+    bool                   server_paused;
+    int                    threads_paused;
 } nx_server_t;
 
 
@@ -89,6 +91,18 @@ static void thread_process_listeners(pn_driver_t *driver)
     }
 }
 
+
+static void block_if_paused_LH(void)
+{
+    if (nx_server->server_paused) {
+        nx_server->threads_paused++;
+        sys_cond_signal_all(nx_server->cond);
+        while (nx_server->server_paused)
+            sys_cond_wait(nx_server->cond, nx_server->lock);
+        nx_server->threads_paused--;
+    }
+}
+
 //
 // TEMPORARY FUNCTION PROTOTYPES
 //
@@ -124,7 +138,12 @@ static void *thread_run(void *arg)
         sys_mutex_lock(nx_server->lock);
 
         //
-        // First, service pending timers.
+        // Check to see if the server is pausing.  If so, block here.
+        //
+        block_if_paused_LH();
+
+        //
+        // Service pending timers.
         //
         nx_timer_t *timer = DEQ_HEAD(nx_server->pending_timers);
         if (timer) {
@@ -393,6 +412,8 @@ void nx_server_initialize(int                   thread_count,
     nx_server->work_queue          = work_queue();
     nx_server->a_thread_is_waiting = false;
     nx_server->threads_active      = 0;
+    nx_server->server_paused       = false;
+    nx_server->threads_paused      = 0;
 }
 
 
@@ -429,6 +450,40 @@ void nx_server_run(void)
 
     for (i = 1; i < nx_server->thread_count; i++)
         thread_join(nx_server->threads[i]);
+}
+
+
+void nx_server_pause(void)
+{
+    sys_mutex_lock(nx_server->lock);
+    assert(!nx_server->server_paused);
+
+    //
+    // Set the paused flag to stop all the threads.
+    //
+    nx_server->server_paused = true;
+
+    //
+    // Awaken all threads that are currently blocking.
+    //
+    sys_cond_signal_all(nx_server->cond);
+
+    //
+    // Wait for the paused thread count to be the total thread count - 1 (exclude self).
+    //
+    while (nx_server->threads_paused < nx_server->thread_count - 1)
+        sys_cond_wait(nx_server->cond, nx_server->lock);
+
+    sys_mutex_unlock(nx_server->lock);
+}
+
+
+void nx_server_resume(void)
+{
+    sys_mutex_lock(nx_server->lock);
+    nx_server->server_paused = false;
+    sys_cond_signal_all(nx_server->cond);
+    sys_mutex_unlock(nx_server->lock);
 }
 
 

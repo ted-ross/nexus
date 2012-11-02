@@ -31,18 +31,21 @@
 #define DEQ(t) struct { \
     t      *head;       \
     t      *tail;       \
+    t      *scratch;    \
     size_t  size;       \
     }
 
 #define DEQ_LINKS(t) t *prev; t *next
 
-#define DEQ_INIT(d) do { d.head = 0; d.tail = 0; d.size = 0; } while (0)
+#define DEQ_INIT(d) do { d.head = 0; d.tail = 0; d.scratch = 0; d.size = 0; } while (0)
 #define DEQ_HEAD(d) (d.head)
 #define DEQ_TAIL(d) (d.tail)
 #define DEQ_SIZE(d) (d.size)
 
 #define DEQ_INSERT_HEAD(d,i)      \
 do {                              \
+    CT_ASSERT((i)->next == 0);    \
+    CT_ASSERT((i)->prev == 0);    \
     if (d.head) {                 \
         (i)->next = d.head;       \
         d.head->prev = i;         \
@@ -58,6 +61,8 @@ do {                              \
 
 #define DEQ_INSERT_TAIL(d,i)      \
 do {                              \
+    CT_ASSERT((i)->next == 0);    \
+    CT_ASSERT((i)->prev == 0);    \
     if (d.tail) {                 \
         (i)->prev = d.tail;       \
         d.tail->next = i;         \
@@ -75,12 +80,16 @@ do {                              \
 do {                            \
     CT_ASSERT(d.head);          \
     if (d.head) {               \
+        d.scratch = d.head;     \
         d.head = d.head->next;  \
         if (d.head == 0) {      \
             d.tail = 0;         \
             CT_ASSERT(d.size == 1); \
-        }                       \
+        } else                  \
+            d.head->prev = 0;   \
         d.size--;               \
+        d.scratch->next = 0;    \
+        d.scratch->prev = 0;    \
     }                           \
 } while (0)
 
@@ -88,15 +97,23 @@ do {                            \
 do {                            \
     CT_ASSERT(d.tail);          \
     if (d.tail) {               \
+        d.scratch = d.tail;     \
         d.tail = d.tail->prev;  \
-        if (d.tail == 0)        \
+        if (d.tail == 0) {      \
             d.head = 0;         \
+            CT_ASSERT(d.size == 1); \
+        } else                  \
+            d.tail->next = 0;   \
         d.size--;               \
+        d.scratch->next = 0;    \
+        d.scratch->prev = 0;    \
     }                           \
 } while (0)
 
 #define DEQ_INSERT_AFTER(d,i,a) \
 do {                            \
+    CT_ASSERT((i)->next == 0);  \
+    CT_ASSERT((i)->prev == 0);  \
     if ((a)->next)              \
         (a)->next->prev = (i);  \
     else                        \
@@ -118,6 +135,8 @@ do {                                           \
     else                                       \
         d.head = (i)->next;                    \
     d.size--;                                  \
+    (i)->next = 0;                             \
+    (i)->prev = 0;                             \
     CT_ASSERT(d.size || (!d.head && !d.tail)); \
 } while (0)
 

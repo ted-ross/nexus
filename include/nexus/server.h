@@ -89,6 +89,21 @@ void nx_server_run(void);
 
 
 /**
+ * Pause (quiesce) the server.  This call blocks until all of the worker threads (except
+ * the one calling the this function) are finished processing and have been blocked.  When
+ * this call returns, the calling thread is the only thread running in the process.
+ */
+void nx_server_pause(void);
+
+
+/**
+ * Resume normal operation of a paused server.  This call unblocks all of the worker threads
+ * so they can resume normal connection processing.
+ */
+void nx_server_resume(void);
+
+
+/**
  * Activate a connection for output.
  *
  * This function is used to request that the server activate the connection associated

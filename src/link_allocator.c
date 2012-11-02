@@ -50,6 +50,8 @@ nx_link_item_t *nx_link_item(pn_link_t *link)
         if (batch) {
             int i;
             for (i = 0; i < 8; i++) {
+                batch[i].next = 0;
+                batch[i].prev = 0;
                 batch[i].link = 0;
                 DEQ_INSERT_TAIL(link_free_list, &batch[i]);
             }

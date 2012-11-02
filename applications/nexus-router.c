@@ -31,7 +31,7 @@ static void thread_start_handler(void* context, int thread_id)
 }
 
 
-static void startup(void* context)
+static void startup(void *context)
 {
     // TODO - Move this into a configuration framework
 
@@ -43,7 +43,6 @@ static void startup(void* context)
 
     nx_server_listener(&server_config, 0);
 }
-
 
 int main(int argc, char **argv)
 {

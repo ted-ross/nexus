@@ -93,6 +93,31 @@ static char* test_immediate(void *context)
 }
 
 
+static char* test_immediate_plus_delayed(void *context)
+{
+    while(fire_head());
+    fire_mask = 0;
+
+    nx_timer_schedule(timers[0], 0);
+    nx_timer_schedule(timers[1], 5);
+
+    if (fire_mask != 0)  return "Premature firing";
+    if (fire_head() > 1) return "Too many firings";
+    if (fire_mask != 1)  return "Incorrect fire mask 1";
+
+    sys_mutex_lock(lock);
+    nx_timer_visit_LH(time++);
+    time += 8;
+    nx_timer_visit_LH(time++);
+    sys_mutex_unlock(lock);
+
+    if (fire_head() < 1) return "Delayed Failed to fire";
+    if (fire_mask != 3)  return "Incorrect fire mask 3";
+
+    return 0;
+}
+
+
 static char* test_single(void *context)
 {
     while(fire_head());
@@ -340,6 +365,7 @@ int main(int argc, char **argv)
 
     TEST_CASE(test_quiet, 0);
     TEST_CASE(test_immediate, 0);
+    TEST_CASE(test_immediate_plus_delayed, 0);
     TEST_CASE(test_single, 0);
     TEST_CASE(test_two_inorder, 0);
     TEST_CASE(test_two_reverse, 0);

@@ -22,6 +22,7 @@
 #include <nexus/ctools.h>
 #include <nexus/threading.h>
 #include <assert.h>
+#include <stdio.h>
 
 static sys_mutex_t     *lock;
 static nx_timer_list_t  free_list;
@@ -128,6 +129,7 @@ void nx_timer_schedule(nx_timer_t *timer, long duration)
     //
     total_time = 0;
     ptr        = DEQ_HEAD(scheduled_timers);
+    assert(!ptr || ptr->prev == 0);
     while (ptr) {
         total_time += ptr->delta_time;
         if (total_time > duration)
@@ -149,15 +151,14 @@ void nx_timer_schedule(nx_timer_t *timer, long duration)
         assert(ptr->delta_time > timer->delta_time);
         ptr->delta_time -= timer->delta_time;
         last = ptr->prev;
-        if (last) {
+        if (last)
             DEQ_INSERT_AFTER(scheduled_timers, timer, last);
-        } else {
+        else
             DEQ_INSERT_HEAD(scheduled_timers, timer);
-        }
     }
 
     timer->state = TIMER_SCHEDULED;
-    
+
     sys_mutex_unlock(lock);
 }
 
