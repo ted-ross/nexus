@@ -14,17 +14,19 @@ Introduction:
     3) Message routing with AMQP
     4) Some approaches to multi-threading and memory/buffer management.
 
-    The server now offers a set of three nailed-up FIFO queues which can be
-    addressed for send or receive using the Proton messenger examples and an
-    address like the following:
+    The target executable, nexus-router, is a message router that registers
+    addresses based on outbound links (subscriptions) and forwards all messages
+    to their destinations.  Addresses currently have the form:
 
-    amqp://<host>/queue1
+    amqp://<host>/any-text
 
 
 Dependencies:
 
-    Please note that this project depends on Qpid Proton-C.  At present,
-    Proton has not yet been released.  In order to build nexus, you will need
+    Please note that this project depends on Qpid Proton-C.  Nexus can be built
+    against both 0.1 and 0.2 versions of Proton (and will track versions going forward).
+
+    If you wish to use a source-built version of Proton, you will need
     to manually set two variables in CMake to complete the linkage to Proton.
 
     Assuming you've built a checked-out version of Proton, the following CMake
