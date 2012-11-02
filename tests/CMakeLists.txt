@@ -21,6 +21,8 @@
 ## Build test applications
 ##
 set(test_SOURCES
+    run_tests.c
+    tool_test.c
     timer_test.c
     ../src/timer.c
     ../src/posix/threading.c

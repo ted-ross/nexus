@@ -21,14 +21,15 @@
 
 typedef char* (*testcase_t)(void *context);
 
-#define TEST_CASE(T,C) {              \
-    char *r = T(C);                   \
-    printf("Test Case %s: ", #T);     \
-    if (r)                            \
-        printf("FAIL: %s\n", r);      \
-    else                              \
-        printf("PASS\n");             \
-}
+#define TEST_CASE(T,C) do {                        \
+    char *r = T(C);                                \
+    printf("Test Case %s.%s: ", __FUNCTION__, #T); \
+    if (r) {                                       \
+        printf("FAIL: %s\n", r);                   \
+        result++;                                  \
+    } else                                         \
+        printf("PASS\n");                          \
+} while(0);
 
 
 #endif

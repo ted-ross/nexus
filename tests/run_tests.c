@@ -17,20 +17,14 @@
  * under the License.
  */
 
-#include <stdio.h>
-#include <nexus/ctools.h>
+int tool_tests();
+int timer_tests();
 
-typedef char* (*testcase_t)(void *context);
-
-
-
-static char* test_deq(void *context)
+int main(int argc, char** argv)
 {
-    
-}
-
-int main(int argc, char **argv)
-{
-    return 0;
+    int result = 0;
+    result += tool_tests();
+    result += timer_tests();
+    return result;
 }
 

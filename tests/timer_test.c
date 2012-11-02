@@ -338,8 +338,10 @@ static char* test_big(void *context)
 }
 
 
-int main(int argc, char **argv)
+int timer_tests(void)
 {
+    int result = 0;
+
     fire_mask = 0;
     DEQ_INIT(pending_timers);
     lock = sys_mutex();
@@ -379,6 +381,6 @@ int main(int argc, char **argv)
 
     nx_timer_finalize();
 
-    return 0;
+    return result;
 }
 
