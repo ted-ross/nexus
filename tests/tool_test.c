@@ -141,6 +141,9 @@ static char* test_deq_basic(void *context)
     subtest = list_well_formed(list, "ICDFBGHE");
     if (subtest) return subtest;
 
+    if (item[0].prev || item[0].next) return "Unlisted item A has non-null pointers";
+    if (item[9].prev || item[9].next) return "Unlisted item J has non-null pointers";
+
     return 0;
 }
 
