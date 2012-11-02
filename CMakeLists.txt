@@ -74,14 +74,6 @@ add_executable(nexus-router ${router_SOURCES})
 target_link_libraries(nexus-router nexus-container)
 
 ##
-## Build test applications
+## Build Tests
 ##
-set(timer_test_SOURCES
-    tests/timer_test.c
-    src/timer.c
-    src/posix/threading.c
-    )
-
-add_executable(timer_test ${timer_test_SOURCES})
-target_link_libraries(timer_test ${pthread_lib})
-
+add_subdirectory(tests)
