@@ -21,17 +21,226 @@
 
 #include <proton/engine.h>
 
-typedef void (*nx_thread_start_cb_t)(void* context, int thread_id);
-typedef int  (*nx_conn_handler_cb_t)(void* context, pn_connection_t *conn);
 
+/**
+ * Thread Start Handler
+ *
+ * Callback invoked when a new server thread is started.  The callback is
+ * invoked on the newly created thread.
+ *
+ * This handler can be used to set processor affinity or other thread-specific
+ * tuning values.
+ *
+ * @param context The handler context supplied in nx_server_initialize.
+ * @param thread_id The integer thread identifier that uniquely identifies this thread.
+ */
+typedef void (*nx_thread_start_cb_t)(void* context, int thread_id);
+
+
+/**
+ * Connection Handler
+ *
+ * Callback invoked when processing is needed on a proton connection.  This callback
+ * shall be invoked on one of the server's worker threads.  The server guarantees that
+ * no two threads shall be allowed to process a single connection concurrently.
+ * The implementation of this handler may assume that it has exclusive access to the
+ * connection and it's subservient components.
+ *
+ * @param context The handler context supplied in nx_server_initialize.
+ * @param conn The connection that requires processing by the handler.
+ * @return A value greater than zero if the handler did any proton processing for
+ *         the connection.  If no work was done, zero is returned.
+ */
+typedef int (*nx_conn_handler_cb_t)(void* context, pn_connection_t *conn);
+
+
+/**
+ * Server Initializer
+ *
+ * Initialize the server module and prepare it for operation.
+ *
+ * @param thread_count The number of worker threads (1 or more) that the server shall create
+ * @param hander The handler for processing an operational connection
+ * @param close_handler The handler for a connection who's transport has closed
+ * @param start_cb The thread-start handler invoked per thread on thread startup
+ * @param handler_context Opaque context to be passed back in the callback functions
+ */
 void nx_server_initialize(int                   thread_count,
                           nx_conn_handler_cb_t  handler,
                           nx_conn_handler_cb_t  close_handler,
                           nx_thread_start_cb_t  start_cb,
                           void                 *handler_context);
+
+
+/**
+ * Server Finalizer
+ *
+ * Finalize the server after it has stopped running.
+ */
 void nx_server_finalize(void);
+
+
+/**
+ * Server Run Entry Point
+ *
+ * Start the operation of the server, including launching all of the worker threads.
+ */
 void nx_server_run(void);
 
+
+/**
+ * Activate a connection for output.
+ *
+ * This function is used to request that the server activate the connection associated
+ * with the supplied link.  It is assumed that the link is associated with a connection
+ * that the caller does not have permission to access (i.e. it may be owned by another
+ * thread currently).  An activated connection will, when writable, appear in the work
+ * list and be invoked for processing by a worker thread.
+ *
+ * @param link The link over which the application wishes to send data
+ */
 void nx_server_activate(pn_link_t *link);
+
+
+typedef struct nx_server_listener_t nx_server_listener_t;
+typedef struct nx_server_connector_t nx_server_connector_t;
+
+/**
+ * Configuration block for a connector or a listener.
+ */
+typedef struct nx_server_config_t {
+    /**
+     * Host name or network address to bind to a listener or use in the connector.
+     */
+    char *host;
+
+    /**
+     * Port name or number to bind to a listener or use in the connector.
+     */
+    char *port;
+
+    /**
+     * Space-separated list of SASL mechanisms to be accepted for the connection.
+     */
+    char *sasl_mechanisms;
+
+    /**
+     * If appropriate for the mechanism, the username for authentication
+     * (connector only)
+     */
+    char *sasl_username;
+
+    /**
+     * If appropriate for the mechanism, the password for authentication
+     * (connector only)
+     */
+    char *sasl_password;
+
+    /**
+     * If appropriate for the mechanism, the minimum acceptable security strength factor
+     */
+    int sasl_minssf;
+
+    /**
+     * If appropriate for the mechanism, the maximum acceptable security strength factor
+     */
+    int sasl_maxssf;
+
+    /**
+     * SSL is enabled for this connection iff non-zero.
+     */
+    int ssl_enabled;
+
+    /**
+     * Connection will take on the role of SSL server iff non-zero.
+     */
+    int ssl_server;
+
+    /**
+     * Iff non-zero AND ssl_enabled is non-zero, this listener will detect the client's use
+     * of SSL or non-SSL and conform to the client's protocol.
+     * (listener only)
+     */
+    int ssl_allow_unsecured_client;
+
+    /**
+     * Path to the file containing the PEM-formatted public certificate for the local end
+     * of the connection.
+     */
+    char *ssl_certificate_file;
+
+    /**
+     * Path to the file containing the PEM-formatted private key for the local end of the
+     * connection.
+     */
+    char *ssl_private_key_file;
+
+    /**
+     * The password used to sign the private key, or NULL if the key is not protected.
+     */
+    char *ssl_password;
+
+    /**
+     * Path to the file containing the PEM-formatted set of certificates of trusted CAs.
+     */
+    char *ssl_trusted_certificate_db;
+
+    /**
+     * Iff non-zero, require that the peer's certificate be supplied and that it be authentic
+     * according to the set of trusted CAs.
+     */
+    int ssl_require_peer_authentication;
+} nx_server_config_t;
+
+
+/**
+ * Create a listener for incoming connections.
+ *
+ * @param config Pointer to a configuration block for this listener.  This block will be
+ *               referenced by the server, not copied.  The referenced record must remain
+ *               in-scope for the life of the listener.
+ * @param context Opaque user context accessible from the connection context.
+ * @return A pointer to the new listener, or NULL in case of failure.
+ */
+nx_server_listener_t *nx_server_listener(nx_server_config_t *config, void *context);
+
+/**
+ * Free the resources associated with a listener.
+ *
+ * @param li A listener pointer returned by nx_server_listener.
+ */
+void nx_server_listener_free(nx_server_listener_t* li);
+
+/**
+ * Close a listener so it will accept no more connections.
+ *
+ * @param li A listener pointer returned by nx_server_listener.
+ */
+void nx_server_listener_close(nx_server_listener_t* li);
+
+/**
+ * Create a connector for an outgoing connection.
+ *
+ * @param config Pointer to a configuration block for this connector.  This block will be
+ *               referenced by the server, not copied.  The referenced record must remain
+ *               in-scope for the life of the connector..
+ * @param context Opaque user context accessible from the connection context.
+ * @return A pointer to the new connector, or NULL in case of failure.
+ */
+nx_server_connector_t *nx_server_connector(nx_server_config_t *config, void *context);
+
+/**
+ * Free the resources associated with a connector.
+ *
+ * @param li A connector pointer returned by nx_server_connector.
+ */
+void nx_server_connector_free(nx_server_connector_t* ct);
+
+/**
+ * Close a connector.
+ *
+ * @param li A connector pointer returned by nx_server_connector.
+ */
+void nx_server_connector_close(nx_server_connector_t* ct);
 
 #endif

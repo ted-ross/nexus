@@ -393,15 +393,6 @@ void nx_server_initialize(int                   thread_count,
     nx_server->work_queue          = work_queue();
     nx_server->a_thread_is_waiting = false;
     nx_server->threads_active      = 0;
-
-    // TEMP
-    char *host   = "0.0.0.0";
-    char *port   = "5672";
-
-    pn_listener_t *listener = pn_listener(nx_server->driver, host, port, 0);
-    if (!listener)
-        printf("[Driver Error %d (%s)]\n",
-               pn_driver_errno(nx_server->driver), pn_driver_error(nx_server->driver));
 }
 
 
@@ -464,6 +455,79 @@ void nx_server_activate(pn_link_t *link)
 
     if (!pn_connector_closed(ctor))
         pn_connector_activate(ctor, PN_CONNECTOR_WRITABLE);
+}
+
+
+nx_server_listener_t *nx_server_listener(nx_server_config_t *config, void *context)
+{
+    nx_server_listener_t *li = NEW(nx_server_listener_t);
+
+    if (!li)
+        return 0;
+
+    li->config      = config;
+    li->context     = context;
+    li->pn_listener = pn_listener(nx_server->driver, config->host, config->port, (void*) li);
+
+    if (!li->pn_listener) {
+        printf("[Driver Error %d (%s)]\n",
+               pn_driver_errno(nx_server->driver), pn_driver_error(nx_server->driver));
+        free(li);
+        return 0;
+    }
+    printf("[Server: Listening on %s:%s]\n", config->host, config->port);
+
+    return li;
+}
+
+
+void nx_server_listener_free(nx_server_listener_t* li)
+{
+    pn_listener_free(li->pn_listener);
+    free(li);
+}
+
+
+void nx_server_listener_close(nx_server_listener_t* li)
+{
+    pn_listener_close(li->pn_listener);
+}
+
+
+nx_server_connector_t *nx_server_connector(nx_server_config_t *config, void *context)
+{
+    nx_server_connector_t *ct = NEW(nx_server_connector_t);
+
+    if (!ct)
+        return 0;
+
+    ct->config       = config;
+    ct->context      = context;
+    ct->pn_connector = pn_connector(nx_server->driver, config->host, config->port, (void*) ct);
+
+    if (!ct->pn_connector) {
+        printf("[Driver Error %d (%s)]\n",
+               pn_driver_errno(nx_server->driver), pn_driver_error(nx_server->driver));
+        free(ct);
+        return 0;
+    }
+    printf("[Server: Connecting to %s:%s]\n", config->host, config->port);
+
+    return ct;
+}
+
+
+void nx_server_connector_free(nx_server_connector_t* ct)
+{
+    // Don't free the proton connector.  This will be done by the connector
+    // processing/cleanup.
+    free(ct);
+}
+
+
+void nx_server_connector_close(nx_server_connector_t* ct)
+{
+    pn_connector_close(ct->pn_connector);
 }
 
 

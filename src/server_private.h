@@ -21,8 +21,24 @@
 
 #include <nexus/server.h>
 #include <nexus/timer.h>
+#include <proton/driver.h>
 
 void nx_server_timer_pending_LH(nx_timer_t *timer);
 void nx_server_timer_cancel_LH(nx_timer_t *timer);
+
+
+struct nx_server_listener_t {
+    nx_server_config_t *config;
+    void               *context;
+    pn_listener_t      *pn_listener;
+};
+
+
+struct nx_server_connector_t {
+    nx_server_config_t *config;
+    void               *context;
+    pn_connector_t     *pn_connector;
+};
+
 
 #endif

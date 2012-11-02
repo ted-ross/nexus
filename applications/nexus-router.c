@@ -23,10 +23,25 @@
 #include <nexus/container.h>
 #include <nexus/link_allocator.h>
 #include <nexus/router.h>
+#include <nexus/timer.h>
 
 static void thread_start_handler(void* context, int thread_id)
 {
     //printf("[Thread Started - id=%d]\n", thread_id);
+}
+
+
+static void startup(void* context)
+{
+    // TODO - Move this into a configuration framework
+
+    static nx_server_config_t server_config;
+    server_config.host            = "0.0.0.0";
+    server_config.port            = "5672";
+    server_config.sasl_mechanisms = "ANONYMOUS";
+    server_config.ssl_enabled     = 0;
+
+    nx_server_listener(&server_config, 0);
 }
 
 
@@ -37,6 +52,10 @@ int main(int argc, char **argv)
 
     nx_server_initialize(4, container_handler, container_close_handler, thread_start_handler, 0);
     nx_router_t *router = nx_router("*", 0);
+
+    nx_timer_t *startup_timer = nx_timer(startup, 0);
+    nx_timer_schedule(startup_timer, 0);
+
     nx_server_run();
     nx_router_free(router);
     nx_server_finalize();
