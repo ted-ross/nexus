@@ -491,7 +491,13 @@ nx_message_t *nx_message_receive(pn_delivery_t *delivery)
     if (!msg) {
         msg = nx_allocate_message();
         pn_delivery_set_context(delivery, (void*) msg);
-        msg->in_delivery = delivery;
+
+        //
+        // Record the incoming delivery only if it is not settled.  If it is 
+        // settled, there's no need to propagate disposition back to the sender.
+        //
+        if (!pn_delivery_settled(delivery))
+            msg->in_delivery = delivery;
     }
 
     //

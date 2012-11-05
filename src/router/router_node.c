@@ -75,7 +75,15 @@ static void router_tx_handler(void* context, pn_delivery_t *delivery, void *link
     }
 
     pn_delivery_set_context(delivery, (void*) msg);
-    msg->out_delivery = delivery;
+
+    //
+    // If there is no incoming delivery, it was pre-settled.  In this case,
+    // we must pre-settle the outgoing delivery as well.
+    //
+    if (msg->in_delivery)
+        msg->out_delivery = delivery;
+    else
+        pn_delivery_settle(delivery);
 
     size = (DEQ_SIZE(rlink->out_fifo));
     sys_mutex_unlock(router->lock);
