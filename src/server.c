@@ -508,6 +508,7 @@ void nx_server_pause(void)
     // Awaken all threads that are currently blocking.
     //
     sys_cond_signal_all(nx_server->cond);
+    pn_driver_wakeup(nx_server->driver);
 
     //
     // Wait for the paused thread count plus the number of threads requesting a pause to equal

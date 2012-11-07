@@ -34,13 +34,17 @@ static void thread_start_handler(void* context, int thread_id)
 
 static void signal_handler(void* context, int signum)
 {
+    nx_server_pause();
     printf("[Signal Caught: %d]\n", signum);
+    nx_server_resume();
 }
 
 
 static void startup(void *context)
 {
     // TODO - Move this into a configuration framework
+
+    nx_server_pause();
 
     static nx_server_config_t server_config;
     server_config.host            = "0.0.0.0";
@@ -49,7 +53,10 @@ static void startup(void *context)
     server_config.ssl_enabled     = 0;
 
     nx_server_listener(&server_config, 0);
+
+    nx_server_resume();
 }
+
 
 int main(int argc, char **argv)
 {
