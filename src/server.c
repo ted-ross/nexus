@@ -27,6 +27,7 @@
 #include "context_pvt.h"
 #include <stdio.h>
 #include <sys/time.h>
+#include <signal.h>
 
 
 typedef struct nx_thread_t {
@@ -38,21 +39,25 @@ typedef struct nx_thread_t {
 
 
 typedef struct nx_server_t {
-    int                    thread_count;
-    pn_driver_t           *driver;
-    nx_thread_start_cb_t   start_handler;
-    nx_conn_handler_cb_t   handler;
-    nx_conn_handler_cb_t   close_handler;
-    void                  *handler_context;
-    sys_cond_t            *cond;
-    sys_mutex_t           *lock;
-    nx_thread_t          **threads;
-    work_queue_t          *work_queue;
-    nx_timer_list_t        pending_timers;
-    bool                   a_thread_is_waiting;
-    int                    threads_active;
-    bool                   server_paused;
-    int                    threads_paused;
+    int                     thread_count;
+    pn_driver_t            *driver;
+    nx_thread_start_cb_t    start_handler;
+    nx_conn_handler_cb_t    handler;
+    nx_conn_handler_cb_t    close_handler;
+    nx_signal_handler_cb_t  signal_handler;
+    void                   *handler_context;
+    sys_cond_t             *cond;
+    sys_mutex_t            *lock;
+    nx_thread_t           **threads;
+    work_queue_t           *work_queue;
+    nx_timer_list_t         pending_timers;
+    bool                    a_thread_is_waiting;
+    int                     threads_active;
+    int                     pause_requests;
+    int                     threads_paused;
+    int                     pause_next_sequence;
+    int                     pause_now_serving;
+    int                     pending_signal;
 } nx_server_t;
 
 
@@ -60,6 +65,13 @@ typedef struct nx_server_t {
  * Singleton Concurrent Proton Driver object
  */
 static nx_server_t *nx_server = 0;
+
+
+static void signal_handler(int signum)
+{
+    nx_server->pending_signal = signum;
+    sys_cond_signal_all(nx_server->cond);
+}
 
 
 static nx_thread_t *thread(int id)
@@ -92,12 +104,25 @@ static void thread_process_listeners(pn_driver_t *driver)
 }
 
 
+static void handle_signals_LH(void)
+{
+    int signum = nx_server->pending_signal;
+
+    if (signum) {
+        nx_server->pending_signal = 0;
+        sys_mutex_unlock(nx_server->lock);
+        nx_server->signal_handler(nx_server->handler_context, signum);
+        sys_mutex_lock(nx_server->lock);
+    }
+}
+
+
 static void block_if_paused_LH(void)
 {
-    if (nx_server->server_paused) {
+    if (nx_server->pause_requests > 0) {
         nx_server->threads_paused++;
         sys_cond_signal_all(nx_server->cond);
-        while (nx_server->server_paused)
+        while (nx_server->pause_requests > 0)
             sys_cond_wait(nx_server->cond, nx_server->lock);
         nx_server->threads_paused--;
     }
@@ -136,6 +161,11 @@ static void *thread_run(void *arg)
     //
     while (thread->running) {
         sys_mutex_lock(nx_server->lock);
+
+        //
+        // Check for pending signals to process
+        //
+        handle_signals_LH();
 
         //
         // Check to see if the server is pausing.  If so, block here.
@@ -378,11 +408,12 @@ static void thread_free(nx_thread_t *thread)
 }
 
 
-void nx_server_initialize(int                   thread_count,
-                          nx_conn_handler_cb_t  handler,
-                          nx_conn_handler_cb_t  close_handler,
-                          nx_thread_start_cb_t  start_cb,
-                          void                 *handler_context)
+void nx_server_initialize(int                     thread_count,
+                          nx_conn_handler_cb_t    handler,
+                          nx_conn_handler_cb_t    close_handler,
+                          nx_signal_handler_cb_t  signal_handler,
+                          nx_thread_start_cb_t    start_cb,
+                          void                   *handler_context)
 {
     int i;
 
@@ -399,6 +430,7 @@ void nx_server_initialize(int                   thread_count,
     nx_server->start_handler   = start_cb;
     nx_server->handler         = handler;
     nx_server->close_handler   = close_handler;
+    nx_server->signal_handler  = signal_handler;
     nx_server->handler_context = handler_context;
     nx_server->lock            = sys_mutex();
     nx_server->cond            = sys_cond();
@@ -412,8 +444,11 @@ void nx_server_initialize(int                   thread_count,
     nx_server->work_queue          = work_queue();
     nx_server->a_thread_is_waiting = false;
     nx_server->threads_active      = 0;
-    nx_server->server_paused       = false;
+    nx_server->pause_requests      = 0;
     nx_server->threads_paused      = 0;
+    nx_server->pause_next_sequence = 0;
+    nx_server->pause_now_serving   = 0;
+    nx_server->pending_signal      = 0;
 }
 
 
@@ -453,15 +488,21 @@ void nx_server_run(void)
 }
 
 
+void nx_server_signal(int signum)
+{
+    signal(signum, signal_handler);
+}
+
+
 void nx_server_pause(void)
 {
     sys_mutex_lock(nx_server->lock);
-    assert(!nx_server->server_paused);
 
     //
-    // Set the paused flag to stop all the threads.
+    // Bump the request count to stop all the threads.
     //
-    nx_server->server_paused = true;
+    nx_server->pause_requests++;
+    int my_sequence = nx_server->pause_next_sequence++;
 
     //
     // Awaken all threads that are currently blocking.
@@ -469,9 +510,12 @@ void nx_server_pause(void)
     sys_cond_signal_all(nx_server->cond);
 
     //
-    // Wait for the paused thread count to be the total thread count - 1 (exclude self).
+    // Wait for the paused thread count plus the number of threads requesting a pause to equal
+    // the total thread count.  Also, don't exit the blocking loop until now_serving equals our
+    // sequence number.  This ensures that concurrent pausers don't run at the same time.
     //
-    while (nx_server->threads_paused < nx_server->thread_count - 1)
+    while ((nx_server->threads_paused + nx_server->pause_requests < nx_server->thread_count) ||
+           (my_sequence != nx_server->pause_now_serving))
         sys_cond_wait(nx_server->cond, nx_server->lock);
 
     sys_mutex_unlock(nx_server->lock);
@@ -481,7 +525,8 @@ void nx_server_pause(void)
 void nx_server_resume(void)
 {
     sys_mutex_lock(nx_server->lock);
-    nx_server->server_paused = false;
+    nx_server->pause_requests--;
+    nx_server->pause_now_serving++;
     sys_cond_signal_all(nx_server->cond);
     sys_mutex_unlock(nx_server->lock);
 }

@@ -24,10 +24,17 @@
 #include <nexus/link_allocator.h>
 #include <nexus/router.h>
 #include <nexus/timer.h>
+#include <signal.h>
 
 static void thread_start_handler(void* context, int thread_id)
 {
     //printf("[Thread Started - id=%d]\n", thread_id);
+}
+
+
+static void signal_handler(void* context, int signum)
+{
+    printf("[Signal Caught: %d]\n", signum);
 }
 
 
@@ -49,11 +56,14 @@ int main(int argc, char **argv)
     nx_link_allocator_initialize();
     container_init();
 
-    nx_server_initialize(4, container_handler, container_close_handler, thread_start_handler, 0);
+    nx_server_initialize(4, container_handler, container_close_handler,
+                         signal_handler, thread_start_handler, 0);
     nx_router_t *router = nx_router("*", 0);
 
     nx_timer_t *startup_timer = nx_timer(startup, 0);
     nx_timer_schedule(startup_timer, 0);
+
+    nx_server_signal(SIGHUP);
 
     nx_server_run();
     nx_router_free(router);

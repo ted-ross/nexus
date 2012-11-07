@@ -55,6 +55,20 @@ typedef int (*nx_conn_handler_cb_t)(void* context, pn_connection_t *conn);
 
 
 /**
+ * Signal Handler
+ *
+ * Callback for caught signals.  This handler will only be invoked for signal numbers
+ * that were registered via nx_server_signal.  The handler is not invoked in the context
+ * of the OS signal handler.  Rather, it is invoked on one of the worker threads in an
+ * orderly sequence.
+ *
+ * @param context The handler context supplied in nx_server_initialize.
+ * @param signum The signal number that was raised.
+ */
+typedef void (*nx_signal_handler_cb_t)(void* context, int signum);
+
+
+/**
  * Server Initializer
  *
  * Initialize the server module and prepare it for operation.
@@ -65,11 +79,12 @@ typedef int (*nx_conn_handler_cb_t)(void* context, pn_connection_t *conn);
  * @param start_cb The thread-start handler invoked per thread on thread startup
  * @param handler_context Opaque context to be passed back in the callback functions
  */
-void nx_server_initialize(int                   thread_count,
-                          nx_conn_handler_cb_t  handler,
-                          nx_conn_handler_cb_t  close_handler,
-                          nx_thread_start_cb_t  start_cb,
-                          void                 *handler_context);
+void nx_server_initialize(int                     thread_count,
+                          nx_conn_handler_cb_t    handler,
+                          nx_conn_handler_cb_t    close_handler,
+                          nx_signal_handler_cb_t  signal_handler,
+                          nx_thread_start_cb_t    start_cb,
+                          void                   *handler_context);
 
 
 /**
@@ -86,6 +101,14 @@ void nx_server_finalize(void);
  * Start the operation of the server, including launching all of the worker threads.
  */
 void nx_server_run(void);
+
+
+/**
+ * Register a signal to be caught and handled by the signal handler.
+ *
+ * @param signum The signal number of a signal to be handled by the application.
+ */
+void nx_server_signal(int signum);
 
 
 /**
