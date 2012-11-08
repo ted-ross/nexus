@@ -26,6 +26,8 @@
 #include <nexus/timer.h>
 #include <signal.h>
 
+static int exit_with_sigint = 0;
+
 static void thread_start_handler(void* context, int thread_id)
 {
     //printf("[Thread Started - id=%d]\n", thread_id);
@@ -35,7 +37,23 @@ static void thread_start_handler(void* context, int thread_id)
 static void signal_handler(void* context, int signum)
 {
     nx_server_pause();
-    printf("[Signal Caught: %d]\n", signum);
+
+    switch (signum) {
+    case SIGINT:
+        exit_with_sigint = 1;
+
+    case SIGQUIT:
+        fflush(stdout);
+        nx_server_stop();
+        break;
+
+    case SIGHUP:
+        break;
+
+    default:
+        break;
+    }
+
     nx_server_resume();
 }
 
@@ -71,10 +89,17 @@ int main(int argc, char **argv)
     nx_timer_schedule(startup_timer, 0);
 
     nx_server_signal(SIGHUP);
+    nx_server_signal(SIGQUIT);
+    nx_server_signal(SIGINT);
 
     nx_server_run();
     nx_router_free(router);
     nx_server_finalize();
+
+    if (exit_with_sigint) {
+	signal(SIGINT, SIG_DFL);
+	kill(getpid(), SIGINT);
+    }
 
     return 0;
 }

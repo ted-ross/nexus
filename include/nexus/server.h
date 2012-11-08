@@ -99,8 +99,19 @@ void nx_server_finalize(void);
  * Server Run Entry Point
  *
  * Start the operation of the server, including launching all of the worker threads.
+ * This function does not return until after the server has been stopped.  The thread
+ * that calls nx_server_run is used as one of the worker threads.
  */
 void nx_server_run(void);
+
+
+/**
+ * Stop the server
+ *
+ * Stop the server and join all of its worker threads.  This function may be called from any
+ * thread.
+ */
+void nx_server_stop(void);
 
 
 /**

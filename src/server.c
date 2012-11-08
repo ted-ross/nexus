@@ -166,11 +166,19 @@ static void *thread_run(void *arg)
         // Check for pending signals to process
         //
         handle_signals_LH();
+        if (!thread->running) {
+            sys_mutex_unlock(nx_server->lock);
+            break;
+        }
 
         //
         // Check to see if the server is pausing.  If so, block here.
         //
         block_if_paused_LH();
+        if (!thread->running) {
+            sys_mutex_unlock(nx_server->lock);
+            break;
+        }
 
         //
         // Service pending timers.
@@ -377,17 +385,15 @@ static void thread_start(nx_thread_t *thread)
     thread->thread = sys_thread(thread_run, (void*) thread);
 }
 
-/*
+
 static void thread_cancel(nx_thread_t *thread)
 {
     if (!thread)
         return;
 
     thread->running = 0;
-    sys_cond_signal_all(nx_server->cond);
-    pn_driver_wakeup(nx_server->driver);
 }
-*/
+
 
 static void thread_join(nx_thread_t *thread)
 {
@@ -485,6 +491,18 @@ void nx_server_run(void)
 
     for (i = 1; i < nx_server->thread_count; i++)
         thread_join(nx_server->threads[i]);
+}
+
+
+void nx_server_stop(void)
+{
+    int idx;
+
+    for (idx = 0; idx < nx_server->thread_count; idx++)
+        thread_cancel(nx_server->threads[idx]);
+
+    sys_cond_signal_all(nx_server->cond);
+    pn_driver_wakeup(nx_server->driver);
 }
 
 
