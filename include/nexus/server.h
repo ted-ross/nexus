@@ -296,14 +296,14 @@ nx_server_connector_t *nx_server_connector(nx_server_config_t *config, void *con
 /**
  * Free the resources associated with a connector.
  *
- * @param li A connector pointer returned by nx_server_connector.
+ * @param ct A connector pointer returned by nx_server_connector.
  */
 void nx_server_connector_free(nx_server_connector_t* ct);
 
 /**
  * Close a connector.
  *
- * @param li A connector pointer returned by nx_server_connector.
+ * @param ct A connector pointer returned by nx_server_connector.
  */
 void nx_server_connector_close(nx_server_connector_t* ct);
 
