@@ -189,7 +189,7 @@ static void container_do_updated(pn_delivery_t *delivery)
 }
 
 
-int container_close_handler(void* unused, pn_connection_t *conn)
+static int container_close_handler(void* unused, pn_connection_t *conn)
 {
     //
     // Close all links, passing False as the 'closed' argument.  These links are not
@@ -218,7 +218,7 @@ int container_close_handler(void* unused, pn_connection_t *conn)
 }
 
 
-int container_handler(void* unused, pn_connection_t *conn)
+static int container_process_handler(void* unused, pn_connection_t *conn)
 {
     pn_session_t    *ssn;
     pn_link_t       *link;
@@ -230,9 +230,6 @@ int container_handler(void* unused, pn_connection_t *conn)
 
     // initialize the connection if it's new
     if (pn_connection_state(conn) & PN_LOCAL_UNINIT) {
-        //printf("[Container: Connection Opened - container=%s hostname=%s]\n",
-        //       pn_connection_remote_container(conn),
-        //       pn_connection_remote_hostname(conn));
         pn_connection_open(conn);
         event_count++;
     }
@@ -241,7 +238,6 @@ int container_handler(void* unused, pn_connection_t *conn)
     ssn = pn_session_head(conn, PN_LOCAL_UNINIT);
     while (ssn) {
         pn_session_open(ssn);
-        //printf("[Container: Session Opened]\n");
         ssn = pn_session_next(ssn, PN_LOCAL_UNINIT);
         event_count++;
     }
@@ -295,7 +291,6 @@ int container_handler(void* unused, pn_connection_t *conn)
     // teardown any terminating links
     link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
     while (link) {
-        //printf("[Container: Link Closed - name=%s]\n", pn_link_name(link));
         nx_link_item_t   *item = (nx_link_item_t*) pn_link_get_context(link);
         container_node_t *node = (container_node_t*) item->container_context;
         if (node)
@@ -308,7 +303,6 @@ int container_handler(void* unused, pn_connection_t *conn)
     // teardown any terminating sessions
     ssn = pn_session_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
     while (ssn) {
-        //printf("[Container: Session Closed]\n");
         pn_session_close(ssn);
         ssn = pn_session_next(ssn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
         event_count++;
@@ -316,12 +310,24 @@ int container_handler(void* unused, pn_connection_t *conn)
 
     // teardown the connection if it's terminating
     if (pn_connection_state(conn) == (PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED)) {
-        //printf("[Container: Connection Closed]\n");
         pn_connection_close(conn);
         event_count++;
     }
 
     return event_count;
+}
+
+
+int container_handler(void* context, nx_conn_event_t event, pn_connection_t *conn)
+{
+    switch (event) {
+    case NX_CONN_EVENT_LISTENER_OPEN:  break; // TODO - Propagate these up
+    case NX_CONN_EVENT_CONNECTOR_OPEN: break;
+    case NX_CONN_EVENT_CLOSE:          return container_close_handler(context, conn);
+    case NX_CONN_EVENT_PROCESS:        return container_process_handler(context, conn);
+    }
+
+    return 0;
 }
 
 

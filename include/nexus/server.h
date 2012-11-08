@@ -21,6 +21,21 @@
 
 #include <proton/engine.h>
 
+/**
+ * Event type for the connection callback.
+ *
+ * @enum NX_CONN_EVENT_LISTENER_OPEN The connection just opened via a listener (inbound).
+ * @enum NX_CONN_EVENT_CONNECTOR_OPEN The connection just opened via a connector (outbound).
+ * @enum NX_CONN_EVENT_CLOSE The connection was closed at the transport level (not cleanly).
+ * @enum NX_CONN_EVENT_PROCESS The connection requires processing.
+ */
+typedef enum {
+    NX_CONN_EVENT_LISTENER_OPEN,
+    NX_CONN_EVENT_CONNECTOR_OPEN,
+    NX_CONN_EVENT_CLOSE,
+    NX_CONN_EVENT_PROCESS
+} nx_conn_event_t;
+
 
 /**
  * Thread Start Handler
@@ -47,11 +62,12 @@ typedef void (*nx_thread_start_cb_t)(void* context, int thread_id);
  * connection and it's subservient components.
  *
  * @param context The handler context supplied in nx_server_initialize.
+ * @param event The event/reason for the invocation of the handler.
  * @param conn The connection that requires processing by the handler.
  * @return A value greater than zero if the handler did any proton processing for
  *         the connection.  If no work was done, zero is returned.
  */
-typedef int (*nx_conn_handler_cb_t)(void* context, pn_connection_t *conn);
+typedef int (*nx_conn_handler_cb_t)(void* context, nx_conn_event_t event, pn_connection_t *conn);
 
 
 /**
@@ -74,16 +90,15 @@ typedef void (*nx_signal_handler_cb_t)(void* context, int signum);
  * Initialize the server module and prepare it for operation.
  *
  * @param thread_count The number of worker threads (1 or more) that the server shall create
- * @param hander The handler for processing an operational connection
+ * @param conn_hander The handler for processing an operational connection
  * @param close_handler The handler for a connection who's transport has closed
- * @param start_cb The thread-start handler invoked per thread on thread startup
+ * @param start_handler The thread-start handler invoked per thread on thread startup
  * @param handler_context Opaque context to be passed back in the callback functions
  */
 void nx_server_initialize(int                     thread_count,
-                          nx_conn_handler_cb_t    handler,
-                          nx_conn_handler_cb_t    close_handler,
+                          nx_conn_handler_cb_t    conn_handler,
                           nx_signal_handler_cb_t  signal_handler,
-                          nx_thread_start_cb_t    start_cb,
+                          nx_thread_start_cb_t    start_handler,
                           void                   *handler_context);
 
 

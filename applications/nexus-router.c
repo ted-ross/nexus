@@ -81,8 +81,7 @@ int main(int argc, char **argv)
     nx_link_allocator_initialize();
     container_init();
 
-    nx_server_initialize(4, container_handler, container_close_handler,
-                         signal_handler, thread_start_handler, 0);
+    nx_server_initialize(4, container_handler, signal_handler, thread_start_handler, 0);
     nx_router_t *router = nx_router("*", 0);
 
     nx_timer_t *startup_timer = nx_timer(startup, 0);

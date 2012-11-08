@@ -20,6 +20,7 @@
  */
 
 #include <proton/engine.h>
+#include <nexus/server.h>
 
 typedef struct container_node_t container_node_t;
 typedef void (*container_delivery_handler_t)    (void* context, pn_delivery_t *delivery, void *link_context);
@@ -39,8 +40,7 @@ typedef struct {
 } node_descriptor_t;
 
 void container_init(void);
-int  container_close_handler(void* context, pn_connection_t *conn);
-int  container_handler(void* context, pn_connection_t *conn);
+int  container_handler(void* context, nx_conn_event_t event, pn_connection_t *conn);
 
 container_node_t *container_register_node(node_descriptor_t desc);
 int container_unregister_node(container_node_t *node);

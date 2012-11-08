@@ -42,8 +42,7 @@ typedef struct nx_server_t {
     int                     thread_count;
     pn_driver_t            *driver;
     nx_thread_start_cb_t    start_handler;
-    nx_conn_handler_cb_t    handler;
-    nx_conn_handler_cb_t    close_handler;
+    nx_conn_handler_cb_t    conn_handler;
     nx_signal_handler_cb_t  signal_handler;
     void                   *handler_context;
     sys_cond_t             *cond;
@@ -193,7 +192,7 @@ static void *thread_run(void *arg)
             nx_timer_idle_LH(timer);
 
             //
-            // Release the lock and invoke the handler.
+            // Release the lock and invoke the connection handler.
             //
             sys_mutex_unlock(nx_server->lock);
             timer->handler(timer->context);
@@ -332,11 +331,15 @@ static void *thread_run(void *arg)
                 }
                 else if (context_get_state(ctx) == CONN_STATE_OPERATIONAL) {
                     if (pn_connector_closed(work)) {
-                        nx_server->close_handler(nx_server->handler_context, pn_connector_connection(work));
+                        nx_server->conn_handler(nx_server->handler_context,
+                                                NX_CONN_EVENT_CLOSE,
+                                                pn_connector_connection(work));
                         events = 0;
                     }
                     else
-                        events = nx_server->handler(nx_server->handler_context, pn_connector_connection(work));
+                        events = nx_server->conn_handler(nx_server->handler_context,
+                                                         NX_CONN_EVENT_PROCESS,
+                                                         pn_connector_connection(work));
                 }
             } while (events > 0);
 
@@ -415,10 +418,9 @@ static void thread_free(nx_thread_t *thread)
 
 
 void nx_server_initialize(int                     thread_count,
-                          nx_conn_handler_cb_t    handler,
-                          nx_conn_handler_cb_t    close_handler,
+                          nx_conn_handler_cb_t    conn_handler,
                           nx_signal_handler_cb_t  signal_handler,
-                          nx_thread_start_cb_t    start_cb,
+                          nx_thread_start_cb_t    start_handler,
                           void                   *handler_context)
 {
     int i;
@@ -433,9 +435,8 @@ void nx_server_initialize(int                     thread_count,
 
     nx_server->thread_count    = thread_count;
     nx_server->driver          = pn_driver();
-    nx_server->start_handler   = start_cb;
-    nx_server->handler         = handler;
-    nx_server->close_handler   = close_handler;
+    nx_server->start_handler   = start_handler;
+    nx_server->conn_handler    = conn_handler;
     nx_server->signal_handler  = signal_handler;
     nx_server->handler_context = handler_context;
     nx_server->lock            = sys_mutex();
