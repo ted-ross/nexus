@@ -19,6 +19,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <nexus/alloc.h>
 #include "context_pvt.h"
 
 struct context_t {
@@ -29,9 +30,18 @@ struct context_t {
     void           *user_context;
 };
 
+ALLOC_DECLARE(context_t);
+ALLOC_DEFINE(context_t);
+int alloc_init = 0;
+
 context_t *context(conn_state_t initial, pn_connector_t *cxtr)
 {
-    context_t *c = (context_t*) malloc(sizeof(context_t));
+    if (!alloc_init) {
+        init_context_t();
+        alloc_init = 1;
+    }
+
+    context_t *c = new_context_t();
     if (!c)
         return 0;
     c->state          = initial;
@@ -46,7 +56,7 @@ context_t *context(conn_state_t initial, pn_connector_t *cxtr)
 void context_free(context_t *context)
 {
     if (context)
-        free(context);
+        free_context_t(context);
 }
 
 
