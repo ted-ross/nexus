@@ -19,12 +19,14 @@
 
 int tool_tests();
 int timer_tests();
+int alloc_tests();
 
 int main(int argc, char** argv)
 {
     int result = 0;
     result += tool_tests();
     result += timer_tests();
+    result += alloc_tests();
     return result;
 }
 

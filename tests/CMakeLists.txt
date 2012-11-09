@@ -24,7 +24,9 @@ set(test_SOURCES
     run_tests.c
     tool_test.c
     timer_test.c
+    alloc_test.c
     ../src/timer.c
+    ../src/alloc.c
     ../src/posix/threading.c
     )
 

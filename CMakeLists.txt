@@ -41,6 +41,7 @@ set(server_SOURCES
     src/auth.c
     src/work_queue.c
     src/timer.c
+    src/alloc.c
     )
 
 add_library(nexus-server SHARED ${server_SOURCES})
