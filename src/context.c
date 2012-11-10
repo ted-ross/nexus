@@ -32,15 +32,9 @@ struct context_t {
 
 ALLOC_DECLARE(context_t);
 ALLOC_DEFINE(context_t);
-int alloc_init = 0;
 
 context_t *context(conn_state_t initial, pn_connector_t *cxtr)
 {
-    if (!alloc_init) {
-        init_context_t();
-        alloc_init = 1;
-    }
-
     context_t *c = new_context_t();
     if (!c)
         return 0;

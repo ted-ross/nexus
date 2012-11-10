@@ -20,7 +20,7 @@
 #include "test_case.h"
 #include <stdio.h>
 #include <string.h>
-#include <nexus/alloc.h>
+#include "alloc_private.h"
 
 typedef struct {
     int A;
@@ -51,12 +51,10 @@ static char* test_alloc_basic(void *context)
     nx_alloc_stats_t *stats;
     char             *error;
 
-    init_object_t();
-    stats = alloc_stats_object_t();
-
     for (idx = 0; idx < 20; idx++)
         obj[idx] = new_object_t();
 
+    stats = alloc_stats_object_t();
     error = check_stats(stats, 21, 0, 21, 0, 0);
     if (error) return error;
 
@@ -79,6 +77,7 @@ static char* test_alloc_basic(void *context)
 int alloc_tests(void)
 {
     int result = 0;
+    nx_alloc_initialize();
 
     TEST_CASE(test_alloc_basic, 0);
 

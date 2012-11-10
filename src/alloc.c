@@ -20,6 +20,7 @@
 #include <nexus/alloc.h>
 #include <nexus/ctools.h>
 #include <memory.h>
+#include <stdio.h>
 
 typedef struct item_t item_t;
 
@@ -37,26 +38,39 @@ struct nx_alloc_pool_t {
 nx_alloc_config_t nx_alloc_default_config_big   = {16,  32, 0};
 nx_alloc_config_t nx_alloc_default_config_small = {64, 128, 0};
 
+sys_mutex_t *init_lock;
 
-void nx_alloc_init(nx_alloc_type_desc_t *desc)
+static void nx_alloc_init(nx_alloc_type_desc_t *desc)
 {
-    if (desc->config == 0)
-        desc->config = desc->type_size > 256 ?
-            &nx_alloc_default_config_big : &nx_alloc_default_config_small;
+    sys_mutex_lock(init_lock);
 
-    assert (desc->config->local_free_list_max >= desc->config->transfer_batch_size);
+    if (!desc->global_pool) {
+        if (desc->config == 0)
+            desc->config = desc->type_size > 256 ?
+                &nx_alloc_default_config_big : &nx_alloc_default_config_small;
 
-    desc->global_pool = NEW(nx_alloc_pool_t);
-    DEQ_INIT(desc->global_pool->free_list);
-    desc->lock = sys_mutex();
-    desc->stats = NEW(nx_alloc_stats_t);
-    memset(desc->stats, 0, sizeof(nx_alloc_stats_t));
+        assert (desc->config->local_free_list_max >= desc->config->transfer_batch_size);
+
+        desc->global_pool = NEW(nx_alloc_pool_t);
+        DEQ_INIT(desc->global_pool->free_list);
+        desc->lock = sys_mutex();
+        desc->stats = NEW(nx_alloc_stats_t);
+        memset(desc->stats, 0, sizeof(nx_alloc_stats_t));
+    }
+
+    sys_mutex_unlock(init_lock);
 }
 
 
 void *nx_alloc(nx_alloc_type_desc_t *desc, nx_alloc_pool_t **tpool)
 {
     int idx;
+
+    //
+    // If the descriptor is not initialized, set it up now.
+    //
+    if (!desc->global_pool)
+        nx_alloc_init(desc);
 
     //
     // If this is the thread's first pass through here, allocate the
@@ -161,5 +175,11 @@ void nx_dealloc(nx_alloc_type_desc_t *desc, nx_alloc_pool_t **tpool, void *p)
     }
 
     sys_mutex_unlock(desc->lock);
+}
+
+
+void nx_alloc_initialize(void)
+{
+    init_lock = sys_mutex();
 }
 

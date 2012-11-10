@@ -22,13 +22,13 @@
 #include <nexus/threading.h>
 #include "server_private.h"
 #include "timer_private.h"
+#include "alloc_private.h"
 #include "auth.h"
 #include "work_queue.h"
 #include "context_pvt.h"
 #include <stdio.h>
 #include <sys/time.h>
 #include <signal.h>
-
 
 typedef struct nx_thread_t {
     int           thread_id;
@@ -428,6 +428,7 @@ void nx_server_initialize(int                     thread_count,
     if (nx_server)
         return;     // TODO - Fail in a more dramatic way
 
+    nx_alloc_initialize();
     nx_server = NEW(nx_server_t);
 
     if (!nx_server)

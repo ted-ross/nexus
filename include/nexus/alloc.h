@@ -48,20 +48,18 @@ typedef struct {
     sys_mutex_t       *lock;
 } nx_alloc_type_desc_t;
 
-void nx_alloc_init(nx_alloc_type_desc_t *desc);
+
 void *nx_alloc(nx_alloc_type_desc_t *desc, nx_alloc_pool_t **tpool);
 void nx_dealloc(nx_alloc_type_desc_t *desc, nx_alloc_pool_t **tpool, void *p);
 
 
 #define ALLOC_DECLARE(T) \
     T *new_##T();        \
-    void free_##T(T *p); \
-    void init_##T()
+    void free_##T(T *p)
 
 #define ALLOC_DEFINE_CONFIG(T,C)                                    \
     nx_alloc_type_desc_t __desc_##T = {#T, sizeof(T), C, 0, 0, 0};  \
     __thread nx_alloc_pool_t *__local_pool_##T = 0;                 \
-    void init_##T() { nx_alloc_init(&__desc_##T); }                 \
     T *new_##T() { return (T*) nx_alloc(&__desc_##T, &__local_pool_##T); }  \
     void free_##T(T *p) { nx_dealloc(&__desc_##T, &__local_pool_##T, (void*) p); } \
     nx_alloc_stats_t *alloc_stats_##T() { return __desc_##T.stats; }
