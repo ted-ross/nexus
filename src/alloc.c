@@ -39,6 +39,7 @@ nx_alloc_config_t nx_alloc_default_config_big   = {16,  32, 0};
 nx_alloc_config_t nx_alloc_default_config_small = {64, 128, 0};
 
 sys_mutex_t *init_lock;
+item_list_t  type_list;
 
 static void nx_alloc_init(nx_alloc_type_desc_t *desc)
 {
@@ -57,6 +58,11 @@ static void nx_alloc_init(nx_alloc_type_desc_t *desc)
         desc->stats = NEW(nx_alloc_stats_t);
         memset(desc->stats, 0, sizeof(nx_alloc_stats_t));
     }
+
+    item_t *type_item = NEW(item_t);
+    DEQ_ITEM_INIT(type_item);
+    type_item->desc = desc;
+    DEQ_INSERT_TAIL(type_list, type_item);
 
     sys_mutex_unlock(init_lock);
 }
@@ -139,9 +145,19 @@ void *nx_alloc(nx_alloc_type_desc_t *desc, nx_alloc_pool_t **tpool)
 
 void nx_dealloc(nx_alloc_type_desc_t *desc, nx_alloc_pool_t **tpool, void *p)
 {
-    nx_alloc_pool_t *pool = *tpool;
     item_t          *item = ((item_t*) p) - 1;
     int              idx;
+
+    //
+    // If this is the thread's first pass through here, allocate the
+    // thread-local pool for this type.
+    //
+    if (*tpool == 0) {
+        *tpool = NEW(nx_alloc_pool_t);
+        DEQ_INIT((*tpool)->free_list);
+    }
+
+    nx_alloc_pool_t *pool = *tpool;
 
     DEQ_INSERT_TAIL(pool->free_list, item);
 
@@ -181,5 +197,6 @@ void nx_dealloc(nx_alloc_type_desc_t *desc, nx_alloc_pool_t **tpool, void *p)
 void nx_alloc_initialize(void)
 {
     init_lock = sys_mutex();
+    DEQ_INIT(type_list);
 }
 
