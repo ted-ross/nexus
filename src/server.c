@@ -131,7 +131,7 @@ static void block_if_paused_LH(void)
 // TEMPORARY FUNCTION PROTOTYPES
 //
 void pn_driver_wait_1(pn_driver_t *d);
-void pn_driver_wait_2(pn_driver_t *d, int timeout);
+int  pn_driver_wait_2(pn_driver_t *d, int timeout);
 void pn_driver_wait_3(pn_driver_t *d);
 //
 // END TEMPORARY
@@ -142,6 +142,7 @@ static void *thread_run(void *arg)
     nx_thread_t    *thread = (nx_thread_t*) arg;
     pn_connector_t *work;
     context_t      *ctx;
+    int             error;
 
     if (!thread)
         return 0;
@@ -236,7 +237,15 @@ static void *thread_run(void *arg)
                 //
                 pn_driver_wait_1(nx_server->driver);
                 sys_mutex_unlock(nx_server->lock);
-                pn_driver_wait_2(nx_server->driver, duration);
+
+                do {
+                    error = pn_driver_wait_2(nx_server->driver, duration);
+                } while (error == PN_INTR);
+                if (error) {
+                    printf("Driver Error: %s\n", pn_error_text(pn_error(nx_server->driver)));
+                    exit(-1);
+                }
+
                 sys_mutex_lock(nx_server->lock);
                 pn_driver_wait_3(nx_server->driver);
 
