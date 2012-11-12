@@ -70,7 +70,7 @@ static void startup(void *context)
     server_config.sasl_mechanisms = "ANONYMOUS";
     server_config.ssl_enabled     = 0;
 
-    nx_server_listener(&server_config, 0);
+    nx_server_listen(&server_config, 0);
 
     nx_server_resume();
 }

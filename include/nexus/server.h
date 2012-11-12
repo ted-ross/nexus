@@ -53,24 +53,6 @@ typedef void (*nx_thread_start_cb_t)(void* context, int thread_id);
 
 
 /**
- * Connection Handler
- *
- * Callback invoked when processing is needed on a proton connection.  This callback
- * shall be invoked on one of the server's worker threads.  The server guarantees that
- * no two threads shall be allowed to process a single connection concurrently.
- * The implementation of this handler may assume that it has exclusive access to the
- * connection and it's subservient components.
- *
- * @param context The handler context supplied in nx_server_initialize.
- * @param event The event/reason for the invocation of the handler.
- * @param conn The connection that requires processing by the handler.
- * @return A value greater than zero if the handler did any proton processing for
- *         the connection.  If no work was done, zero is returned.
- */
-typedef int (*nx_conn_handler_cb_t)(void* context, nx_conn_event_t event, pn_connection_t *conn);
-
-
-/**
  * Signal Handler
  *
  * Callback for caught signals.  This handler will only be invoked for signal numbers
@@ -82,6 +64,24 @@ typedef int (*nx_conn_handler_cb_t)(void* context, nx_conn_event_t event, pn_con
  * @param signum The signal number that was raised.
  */
 typedef void (*nx_signal_handler_cb_t)(void* context, int signum);
+
+
+/**
+ * Connection Handler
+ *
+ * Callback invoked when processing is needed on a proton connection.  This callback
+ * shall be invoked on one of the server's worker threads.  The server guarantees that
+ * no two threads shall be allowed to process a single connection concurrently.
+ * The implementation of this handler may assume that it has exclusive access to the
+ * connection and it's subservient components.
+ *
+ * @param context The handler context supplied in nx_server_{connect,listen}.
+ * @param event The event/reason for the invocation of the handler.
+ * @param conn The connection that requires processing by the handler.
+ * @return A value greater than zero if the handler did any proton processing for
+ *         the connection.  If no work was done, zero is returned.
+ */
+typedef int (*nx_conn_handler_cb_t)(void* context, nx_conn_event_t event, pn_connection_t *conn);
 
 
 /**
@@ -263,10 +263,10 @@ typedef struct nx_server_config_t {
  * @param config Pointer to a configuration block for this listener.  This block will be
  *               referenced by the server, not copied.  The referenced record must remain
  *               in-scope for the life of the listener.
- * @param context Opaque user context accessible from the connection context.
+ * @param context User context passed back in the connection handler.
  * @return A pointer to the new listener, or NULL in case of failure.
  */
-nx_server_listener_t *nx_server_listener(nx_server_config_t *config, void *context);
+nx_server_listener_t *nx_server_listen(nx_server_config_t *config, void *context);
 
 /**
  * Free the resources associated with a listener.
@@ -288,10 +288,10 @@ void nx_server_listener_close(nx_server_listener_t* li);
  * @param config Pointer to a configuration block for this connector.  This block will be
  *               referenced by the server, not copied.  The referenced record must remain
  *               in-scope for the life of the connector..
- * @param context Opaque user context accessible from the connection context.
+ * @param context User context passed back in the connection handler.
  * @return A pointer to the new connector, or NULL in case of failure.
  */
-nx_server_connector_t *nx_server_connector(nx_server_config_t *config, void *context);
+nx_server_connector_t *nx_server_connect(nx_server_config_t *config, void *context);
 
 /**
  * Free the resources associated with a connector.

@@ -25,7 +25,6 @@
 #include "alloc_private.h"
 #include "auth.h"
 #include "work_queue.h"
-#include "context_pvt.h"
 #include <stdio.h>
 #include <sys/time.h>
 #include <signal.h>
@@ -60,6 +59,9 @@ typedef struct nx_server_t {
 } nx_server_t;
 
 
+ALLOC_DEFINE(nx_connector_t);
+
+
 /**
  * Singleton Concurrent Proton Driver object
  */
@@ -91,12 +93,17 @@ static void thread_process_listeners(pn_driver_t *driver)
 {
     pn_listener_t  *listener = pn_driver_listener(driver);
     pn_connector_t *conn;
-    context_t      *ctx;
+    nx_connector_t *ctx;
 
     while (listener) {
         //printf("[Accepting Connection]\n");
         conn = pn_listener_accept(listener);
-        ctx = context(CONN_STATE_AUTHENTICATING, conn);
+        ctx = new_nx_connector_t();
+        ctx->state        = CONN_STATE_AUTHENTICATING;
+        ctx->owner_thread = CONTEXT_NO_OWNER;
+        ctx->enqueued     = 0;
+        ctx->connector    = conn;
+        ctx->user_context = 0;
         pn_connector_set_context(conn, ctx);
         listener = pn_driver_listener(driver);
     }
@@ -141,7 +148,7 @@ static void *thread_run(void *arg)
 {
     nx_thread_t    *thread = (nx_thread_t*) arg;
     pn_connector_t *work;
-    context_t      *ctx;
+    nx_connector_t *ctx;
     int             error;
 
     if (!thread)
@@ -277,8 +284,8 @@ static void *thread_run(void *arg)
                 work = pn_driver_connector(nx_server->driver);
                 while (work) {
                     ctx = pn_connector_context(work);
-                    if (!context_get_enqueued(ctx) && context_get_owner_thread(ctx) == CONTEXT_NO_OWNER) {
-                        context_set_enqueued(ctx, 1);
+                    if (!ctx->enqueued && ctx->owner_thread == CONTEXT_NO_OWNER) {
+                        ctx->enqueued = 1;
                         work_queue_put(nx_server->work_queue, work);
                         sys_cond_signal(nx_server->cond);
                     }
@@ -298,9 +305,9 @@ static void *thread_run(void *arg)
         //
         if (work) {
             ctx = pn_connector_context(work);
-            if (context_get_owner_thread(ctx) == CONTEXT_NO_OWNER) {
-                context_set_owner_thread(ctx, thread->thread_id);
-                context_set_enqueued(ctx, 0);
+            if (ctx->owner_thread == CONTEXT_NO_OWNER) {
+                ctx->owner_thread = thread->thread_id;
+                ctx->enqueued = 0;
                 nx_server->threads_active++;
             } else {
                 //
@@ -329,7 +336,7 @@ static void *thread_run(void *arg)
                 //
                 // Call the handler that is appropriate for the connector's state.
                 //
-                if      (context_get_state(ctx) == CONN_STATE_AUTHENTICATING) {
+                if      (ctx->state == CONN_STATE_AUTHENTICATING) {
                     if (auth_passes == 0) {
                         auth_handler(work);
                         events = 1;
@@ -338,7 +345,7 @@ static void *thread_run(void *arg)
                         events = 0;
                     }
                 }
-                else if (context_get_state(ctx) == CONN_STATE_OPERATIONAL) {
+                else if (ctx->state == CONN_STATE_OPERATIONAL) {
                     if (pn_connector_closed(work)) {
                         nx_server->conn_handler(nx_server->handler_context,
                                                 NX_CONN_EVENT_CLOSE,
@@ -361,7 +368,7 @@ static void *thread_run(void *arg)
                 //
                 pn_connection_t *conn = pn_connector_connection(work);
                 sys_mutex_lock(nx_server->lock);
-                context_free(ctx);
+                free_nx_connector_t(ctx);
                 pn_connector_free(work);
                 if (conn)
                     pn_connection_free(conn);
@@ -372,7 +379,7 @@ static void *thread_run(void *arg)
                 // The connector lives on.  Mark it as no longer owned by this thread.
                 //
                 sys_mutex_lock(nx_server->lock);
-                context_set_owner_thread(ctx, CONTEXT_NO_OWNER);
+                ctx->owner_thread = CONTEXT_NO_OWNER;
                 nx_server->threads_active--;
                 sys_mutex_unlock(nx_server->lock);
             }
@@ -575,11 +582,11 @@ void nx_server_activate(pn_link_t *link)
     if (!conn)
         return;
 
-    context_t *ctx = pn_connection_get_context(conn);
+    nx_connector_t *ctx = pn_connection_get_context(conn);
     if (!ctx)
         return;
 
-    pn_connector_t *ctor = context_get_connector(ctx);
+    pn_connector_t *ctor = ctx->connector;
     if (!ctor)
         return;
 
@@ -588,7 +595,7 @@ void nx_server_activate(pn_link_t *link)
 }
 
 
-nx_server_listener_t *nx_server_listener(nx_server_config_t *config, void *context)
+nx_server_listener_t *nx_server_listen(nx_server_config_t *config, void *context)
 {
     nx_server_listener_t *li = NEW(nx_server_listener_t);
 
@@ -624,7 +631,7 @@ void nx_server_listener_close(nx_server_listener_t* li)
 }
 
 
-nx_server_connector_t *nx_server_connector(nx_server_config_t *config, void *context)
+nx_server_connector_t *nx_server_connect(nx_server_config_t *config, void *context)
 {
     nx_server_connector_t *ct = NEW(nx_server_connector_t);
 

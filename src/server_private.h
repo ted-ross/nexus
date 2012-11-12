@@ -21,10 +21,32 @@
 
 #include <nexus/server.h>
 #include <nexus/timer.h>
+#include <nexus/alloc.h>
 #include <proton/driver.h>
 
 void nx_server_timer_pending_LH(nx_timer_t *timer);
 void nx_server_timer_cancel_LH(nx_timer_t *timer);
+
+
+typedef enum {
+    CONN_STATE_INITIAL = 0,
+    CONN_STATE_AUTHENTICATING,
+    CONN_STATE_OPERATIONAL,
+    CONN_STATE_FAILED
+} conn_state_t;
+
+#define CONTEXT_NO_OWNER -1
+
+typedef struct {
+    conn_state_t    state;
+    int             owner_thread;
+    int             enqueued;
+    pn_connector_t *connector;
+    void           *user_context;
+} nx_connector_t;
+
+ALLOC_DECLARE(nx_connector_t);
+
 
 
 struct nx_server_listener_t {

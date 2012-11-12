@@ -36,7 +36,6 @@ include_directories(
 ##
 set(server_SOURCES
     src/posix/threading.c
-    src/context.c
     src/server.c
     src/auth.c
     src/work_queue.c
