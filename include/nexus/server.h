@@ -21,6 +21,10 @@
 
 #include <proton/engine.h>
 
+typedef struct nx_listener_t nx_listener_t;
+typedef struct nx_connector_t nx_connector_t;
+typedef struct nx_connection_t nx_connection_t;
+
 /**
  * Event type for the connection callback.
  *
@@ -81,7 +85,7 @@ typedef void (*nx_signal_handler_cb_t)(void* context, int signum);
  * @return A value greater than zero if the handler did any proton processing for
  *         the connection.  If no work was done, zero is returned.
  */
-typedef int (*nx_conn_handler_cb_t)(void* context, nx_conn_event_t event, pn_connection_t *conn);
+typedef int (*nx_conn_handler_cb_t)(void* context, nx_conn_event_t event, nx_connection_t *conn);
 
 
 /**
@@ -166,8 +170,32 @@ void nx_server_resume(void);
 void nx_server_activate(pn_link_t *link);
 
 
-typedef struct nx_server_listener_t nx_server_listener_t;
-typedef struct nx_server_connector_t nx_server_connector_t;
+/**
+ * Set the user context for a connection.
+ *
+ * @param conn Connection object supplied in NX_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @param context User context to be stored with the connection.
+ */
+void nx_connection_set_context(nx_connection_t *conn, void *context);
+
+
+/**
+ * Get the user context from a connection.
+ *
+ * @param conn Connection object supplied in NX_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @return The user context stored with the connection.
+ */
+void *nx_connection_get_context(nx_connection_t *conn);
+
+
+/**
+ * Get the proton-engine connection object.
+ *
+ * @param conn Connection object supplied in NX_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
+ * @return The proton connection object.
+ */
+pn_connection_t *nx_connection_get_engine(nx_connection_t *conn);
+
 
 /**
  * Configuration block for a connector or a listener.
@@ -266,21 +294,21 @@ typedef struct nx_server_config_t {
  * @param context User context passed back in the connection handler.
  * @return A pointer to the new listener, or NULL in case of failure.
  */
-nx_server_listener_t *nx_server_listen(nx_server_config_t *config, void *context);
+nx_listener_t *nx_server_listen(nx_server_config_t *config, void *context);
 
 /**
  * Free the resources associated with a listener.
  *
- * @param li A listener pointer returned by nx_server_listener.
+ * @param li A listener pointer returned by nx_listen.
  */
-void nx_server_listener_free(nx_server_listener_t* li);
+void nx_listener_free(nx_listener_t* li);
 
 /**
  * Close a listener so it will accept no more connections.
  *
- * @param li A listener pointer returned by nx_server_listener.
+ * @param li A listener pointer returned by nx_listen.
  */
-void nx_server_listener_close(nx_server_listener_t* li);
+void nx_listener_close(nx_listener_t* li);
 
 /**
  * Create a connector for an outgoing connection.
@@ -291,20 +319,20 @@ void nx_server_listener_close(nx_server_listener_t* li);
  * @param context User context passed back in the connection handler.
  * @return A pointer to the new connector, or NULL in case of failure.
  */
-nx_server_connector_t *nx_server_connect(nx_server_config_t *config, void *context);
+nx_connector_t *nx_server_connect(nx_server_config_t *config, void *context);
 
 /**
  * Free the resources associated with a connector.
  *
- * @param ct A connector pointer returned by nx_server_connector.
+ * @param ct A connector pointer returned by nx_connect.
  */
-void nx_server_connector_free(nx_server_connector_t* ct);
+void nx_connector_free(nx_connector_t* ct);
 
 /**
  * Close a connector.
  *
- * @param ct A connector pointer returned by nx_server_connector.
+ * @param ct A connector pointer returned by nx_connect.
  */
-void nx_server_connector_close(nx_server_connector_t* ct);
+void nx_connector_close(nx_connector_t* ct);
 
 #endif

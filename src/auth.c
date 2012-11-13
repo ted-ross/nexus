@@ -24,7 +24,7 @@
 #include <proton/sasl.h>
 
 
-void auth_handler(pn_connector_t *cxtr)
+void auth_server_handler(pn_connector_t *cxtr)
 {
     pn_sasl_t       *sasl  = pn_connector_sasl(cxtr);
     pn_sasl_state_t  state = pn_sasl_state(sasl);
@@ -48,14 +48,14 @@ void auth_handler(pn_connector_t *cxtr)
         conn = pn_connection();
         pn_connection_set_container(conn, "nexus"); // TODO - make unique
         pn_connector_set_connection(cxtr, conn);
-        nx_connector_t *context = (nx_connector_t*) pn_connector_context(cxtr);
-        context->state = CONN_STATE_OPERATIONAL;
-        pn_connection_set_context(conn, context);
+        nx_connection_t *ctx = (nx_connection_t*) pn_connector_context(cxtr);
+        ctx->state = CONN_STATE_OPENING;
+        ctx->pn_conn = conn;
+        pn_connection_set_context(conn, ctx);
     } else if (state == PN_SASL_FAIL) {
-        nx_connector_t *context = (nx_connector_t*) pn_connector_context(cxtr);
-        context->state = CONN_STATE_FAILED;
+        nx_connection_t *ctx = (nx_connection_t*) pn_connector_context(cxtr);
+        ctx->state = CONN_STATE_FAILED;
     }
 }
-
 
 

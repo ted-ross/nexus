@@ -59,7 +59,9 @@ typedef struct nx_server_t {
 } nx_server_t;
 
 
+ALLOC_DEFINE(nx_listener_t);
 ALLOC_DEFINE(nx_connector_t);
+ALLOC_DEFINE(nx_connection_t);
 
 
 /**
@@ -91,20 +93,24 @@ static nx_thread_t *thread(int id)
 
 static void thread_process_listeners(pn_driver_t *driver)
 {
-    pn_listener_t  *listener = pn_driver_listener(driver);
-    pn_connector_t *conn;
-    nx_connector_t *ctx;
+    pn_listener_t   *listener = pn_driver_listener(driver);
+    pn_connector_t  *cxtr;
+    nx_connection_t *ctx;
 
     while (listener) {
         //printf("[Accepting Connection]\n");
-        conn = pn_listener_accept(listener);
-        ctx = new_nx_connector_t();
-        ctx->state        = CONN_STATE_AUTHENTICATING;
+        cxtr = pn_listener_accept(listener);
+        ctx = new_nx_connection_t();
+        ctx->state        = CONN_STATE_SASL_SERVER;
         ctx->owner_thread = CONTEXT_NO_OWNER;
         ctx->enqueued     = 0;
-        ctx->connector    = conn;
-        ctx->user_context = 0;
-        pn_connector_set_context(conn, ctx);
+        ctx->pn_cxtr      = cxtr;
+        ctx->pn_conn      = 0;
+        ctx->listener     = (nx_listener_t*) pn_listener_context(listener);
+        ctx->connector    = 0;
+        ctx->context      = ctx->listener->context;
+
+        pn_connector_set_context(cxtr, ctx);
         listener = pn_driver_listener(driver);
     }
 }
@@ -146,10 +152,10 @@ void pn_driver_wait_3(pn_driver_t *d);
 
 static void *thread_run(void *arg)
 {
-    nx_thread_t    *thread = (nx_thread_t*) arg;
-    pn_connector_t *work;
-    nx_connector_t *ctx;
-    int             error;
+    nx_thread_t     *thread = (nx_thread_t*) arg;
+    pn_connector_t  *work;
+    nx_connection_t *ctx;
+    int              error;
 
     if (!thread)
         return 0;
@@ -336,26 +342,48 @@ static void *thread_run(void *arg)
                 //
                 // Call the handler that is appropriate for the connector's state.
                 //
-                if      (ctx->state == CONN_STATE_AUTHENTICATING) {
+                switch (ctx->state) {
+                case CONN_STATE_SASL_SERVER:
                     if (auth_passes == 0) {
-                        auth_handler(work);
+                        auth_server_handler(work);
                         events = 1;
                     } else {
                         auth_passes++;
                         events = 0;
                     }
-                }
-                else if (ctx->state == CONN_STATE_OPERATIONAL) {
+                    break;
+
+                case CONN_STATE_OPENING:
+                    ctx->state = CONN_STATE_OPERATIONAL;
+
+                    nx_conn_event_t event;
+
+                    if (ctx->listener) {
+                        event = NX_CONN_EVENT_LISTENER_OPEN;
+                    } else if (ctx->connector) {
+                        event = NX_CONN_EVENT_CONNECTOR_OPEN;
+                    } else
+                        assert(0);
+
+                    nx_server->conn_handler(ctx->context, event, (nx_connection_t*) pn_connector_context(work));
+                    events = 1;
+                    break;
+
+                case CONN_STATE_OPERATIONAL:
                     if (pn_connector_closed(work)) {
-                        nx_server->conn_handler(nx_server->handler_context,
+                        nx_server->conn_handler(ctx->context,
                                                 NX_CONN_EVENT_CLOSE,
-                                                pn_connector_connection(work));
+                                                (nx_connection_t*) pn_connector_context(work));
                         events = 0;
                     }
                     else
                         events = nx_server->conn_handler(nx_server->handler_context,
                                                          NX_CONN_EVENT_PROCESS,
-                                                         pn_connector_connection(work));
+                                                         (nx_connection_t*) pn_connector_context(work));
+                    break;
+
+                default:
+                    break;
                 }
             } while (events > 0);
 
@@ -368,7 +396,7 @@ static void *thread_run(void *arg)
                 //
                 pn_connection_t *conn = pn_connector_connection(work);
                 sys_mutex_lock(nx_server->lock);
-                free_nx_connector_t(ctx);
+                free_nx_connection_t(ctx);
                 pn_connector_free(work);
                 if (conn)
                     pn_connection_free(conn);
@@ -582,11 +610,11 @@ void nx_server_activate(pn_link_t *link)
     if (!conn)
         return;
 
-    nx_connector_t *ctx = pn_connection_get_context(conn);
+    nx_connection_t *ctx = pn_connection_get_context(conn);
     if (!ctx)
         return;
 
-    pn_connector_t *ctor = ctx->connector;
+    pn_connector_t *ctor = ctx->pn_cxtr;
     if (!ctor)
         return;
 
@@ -595,9 +623,27 @@ void nx_server_activate(pn_link_t *link)
 }
 
 
-nx_server_listener_t *nx_server_listen(nx_server_config_t *config, void *context)
+void nx_connection_set_context(nx_connection_t *conn, void *context)
 {
-    nx_server_listener_t *li = NEW(nx_server_listener_t);
+    conn->user_context = context;
+}
+
+
+void *nx_connection_get_context(nx_connection_t *conn)
+{
+    return conn->user_context;
+}
+
+
+pn_connection_t *nx_connection_get_engine(nx_connection_t *conn)
+{
+    return conn->pn_conn;
+}
+
+
+nx_listener_t *nx_server_listen(nx_server_config_t *config, void *context)
+{
+    nx_listener_t *li = new_nx_listener_t();
 
     if (!li)
         return 0;
@@ -609,7 +655,7 @@ nx_server_listener_t *nx_server_listen(nx_server_config_t *config, void *context
     if (!li->pn_listener) {
         printf("[Driver Error %d (%s)]\n",
                pn_driver_errno(nx_server->driver), pn_driver_error(nx_server->driver));
-        free(li);
+        free_nx_listener_t(li);
         return 0;
     }
     printf("[Server: Listening on %s:%s]\n", config->host, config->port);
@@ -618,22 +664,22 @@ nx_server_listener_t *nx_server_listen(nx_server_config_t *config, void *context
 }
 
 
-void nx_server_listener_free(nx_server_listener_t* li)
+void nx_server_listener_free(nx_listener_t* li)
 {
     pn_listener_free(li->pn_listener);
-    free(li);
+    free_nx_listener_t(li);
 }
 
 
-void nx_server_listener_close(nx_server_listener_t* li)
+void nx_server_listener_close(nx_listener_t* li)
 {
     pn_listener_close(li->pn_listener);
 }
 
 
-nx_server_connector_t *nx_server_connect(nx_server_config_t *config, void *context)
+nx_connector_t *nx_server_connect(nx_server_config_t *config, void *context)
 {
-    nx_server_connector_t *ct = NEW(nx_server_connector_t);
+    nx_connector_t *ct = new_nx_connector_t();
 
     if (!ct)
         return 0;
@@ -645,7 +691,7 @@ nx_server_connector_t *nx_server_connect(nx_server_config_t *config, void *conte
     if (!ct->pn_connector) {
         printf("[Driver Error %d (%s)]\n",
                pn_driver_errno(nx_server->driver), pn_driver_error(nx_server->driver));
-        free(ct);
+        free_nx_connector_t(ct);
         return 0;
     }
     printf("[Server: Connecting to %s:%s]\n", config->host, config->port);
@@ -654,15 +700,15 @@ nx_server_connector_t *nx_server_connect(nx_server_config_t *config, void *conte
 }
 
 
-void nx_server_connector_free(nx_server_connector_t* ct)
+void nx_server_connector_free(nx_connector_t* ct)
 {
     // Don't free the proton connector.  This will be done by the connector
     // processing/cleanup.
-    free(ct);
+    free_nx_connector_t(ct);
 }
 
 
-void nx_server_connector_close(nx_server_connector_t* ct)
+void nx_server_connector_close(nx_connector_t* ct)
 {
     pn_connector_close(ct->pn_connector);
 }

@@ -30,37 +30,45 @@ void nx_server_timer_cancel_LH(nx_timer_t *timer);
 
 typedef enum {
     CONN_STATE_INITIAL = 0,
-    CONN_STATE_AUTHENTICATING,
+    CONN_STATE_SASL_SERVER,
+    CONN_STATE_OPENING,
     CONN_STATE_OPERATIONAL,
     CONN_STATE_FAILED
 } conn_state_t;
 
 #define CONTEXT_NO_OWNER -1
 
-typedef struct {
-    conn_state_t    state;
-    int             owner_thread;
-    int             enqueued;
-    pn_connector_t *connector;
-    void           *user_context;
-} nx_connector_t;
 
-ALLOC_DECLARE(nx_connector_t);
-
-
-
-struct nx_server_listener_t {
+struct nx_listener_t {
     nx_server_config_t *config;
     void               *context;
     pn_listener_t      *pn_listener;
 };
 
 
-struct nx_server_connector_t {
+struct nx_connector_t {
     nx_server_config_t *config;
     void               *context;
     pn_connector_t     *pn_connector;
 };
+
+
+struct nx_connection_t {
+    conn_state_t     state;
+    int              owner_thread;
+    int              enqueued;
+    pn_connector_t  *pn_cxtr;
+    pn_connection_t *pn_conn;
+    nx_listener_t   *listener;
+    nx_connector_t  *connector;
+    void            *context; // Copy of context from listener or connector
+    void            *user_context;
+};
+
+
+ALLOC_DECLARE(nx_listener_t);
+ALLOC_DECLARE(nx_connector_t);
+ALLOC_DECLARE(nx_connection_t);
 
 
 #endif

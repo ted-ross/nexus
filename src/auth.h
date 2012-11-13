@@ -21,6 +21,6 @@
 
 #include <proton/driver.h>
 
-void auth_handler(pn_connector_t *conn);
+void auth_server_handler(pn_connector_t *conn);
 
 #endif

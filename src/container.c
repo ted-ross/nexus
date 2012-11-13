@@ -318,11 +318,13 @@ static int container_process_handler(void* unused, pn_connection_t *conn)
 }
 
 
-int container_handler(void* context, nx_conn_event_t event, pn_connection_t *conn)
+int container_handler(void* context, nx_conn_event_t event, nx_connection_t *nx_conn)
 {
+    pn_connection_t *conn = nx_connection_get_engine(nx_conn);
+
     switch (event) {
-    case NX_CONN_EVENT_LISTENER_OPEN:  break; // TODO - Propagate these up
-    case NX_CONN_EVENT_CONNECTOR_OPEN: break;
+    case NX_CONN_EVENT_LISTENER_OPEN:  printf("L_OPEN\n");   break; // TODO - Propagate these up
+    case NX_CONN_EVENT_CONNECTOR_OPEN: printf("C_OPEN\n");   break;
     case NX_CONN_EVENT_CLOSE:          return container_close_handler(context, conn);
     case NX_CONN_EVENT_PROCESS:        return container_process_handler(context, conn);
     }
