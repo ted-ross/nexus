@@ -29,7 +29,8 @@ void nx_server_timer_cancel_LH(nx_timer_t *timer);
 
 
 typedef enum {
-    CONN_STATE_INITIAL = 0,
+    CONN_STATE_CONNECTING = 0,
+    CONN_STATE_SASL_CLIENT,
     CONN_STATE_SASL_SERVER,
     CONN_STATE_OPENING,
     CONN_STATE_OPERATIONAL,
@@ -37,6 +38,12 @@ typedef enum {
 } conn_state_t;
 
 #define CONTEXT_NO_OWNER -1
+
+typedef enum {
+    CXTR_STATE_CONNECTING = 0,
+    CXTR_STATE_OPEN,
+    CXTR_STATE_FAILED
+} cxtr_state_t;
 
 
 struct nx_listener_t {
@@ -47,9 +54,12 @@ struct nx_listener_t {
 
 
 struct nx_connector_t {
+    cxtr_state_t        state;
     nx_server_config_t *config;
     void               *context;
-    pn_connector_t     *pn_connector;
+    nx_connection_t    *ctx;
+    nx_timer_t         *timer;
+    long                delay;
 };
 
 

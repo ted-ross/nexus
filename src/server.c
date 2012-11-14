@@ -140,6 +140,98 @@ static void block_if_paused_LH(void)
     }
 }
 
+
+static void process_connector(pn_connector_t *cxtr)
+{
+    nx_connection_t *ctx = pn_connector_context(cxtr);
+    int events      = 0;
+    int auth_passes = 0;
+
+    do {
+        //
+        // Step the engine for pre-handler processing
+        //
+        pn_connector_process(cxtr);
+
+        //
+        // Call the handler that is appropriate for the connector's state.
+        //
+        switch (ctx->state) {
+        case CONN_STATE_CONNECTING:
+            if (!pn_connector_closed(cxtr)) {
+                ctx->state = CONN_STATE_SASL_CLIENT;
+                assert(ctx->connector);
+                ctx->connector->state = CXTR_STATE_OPEN;
+                events = 1;
+            } else {
+                ctx->state = CONN_STATE_FAILED;
+                events = 0;
+            }
+            break;
+
+        case CONN_STATE_SASL_CLIENT:
+            if (auth_passes == 0) {
+                auth_client_handler(cxtr);
+                events = 1;
+            } else {
+                auth_passes++;
+                events = 0;
+            }
+            break;
+
+        case CONN_STATE_SASL_SERVER:
+            if (auth_passes == 0) {
+                auth_server_handler(cxtr);
+                events = 1;
+            } else {
+                auth_passes++;
+                events = 0;
+            }
+            break;
+
+        case CONN_STATE_OPENING:
+            ctx->state = CONN_STATE_OPERATIONAL;
+
+            pn_connection_t *conn = pn_connection();
+            pn_connection_set_container(conn, "nexus"); // TODO - make unique
+            pn_connector_set_connection(cxtr, conn);
+            pn_connection_set_context(conn, ctx);
+            ctx->pn_conn = conn;
+
+            nx_conn_event_t ce;
+
+            if (ctx->listener) {
+                ce = NX_CONN_EVENT_LISTENER_OPEN;
+            } else if (ctx->connector) {
+                ce = NX_CONN_EVENT_CONNECTOR_OPEN;
+                ctx->connector->delay = 0;
+            } else
+                assert(0);
+
+            nx_server->conn_handler(ctx->context, ce, (nx_connection_t*) pn_connector_context(cxtr));
+            events = 1;
+            break;
+
+        case CONN_STATE_OPERATIONAL:
+            if (pn_connector_closed(cxtr)) {
+                nx_server->conn_handler(ctx->context,
+                                        NX_CONN_EVENT_CLOSE,
+                                        (nx_connection_t*) pn_connector_context(cxtr));
+                events = 0;
+            }
+            else
+                events = nx_server->conn_handler(nx_server->handler_context,
+                                                 NX_CONN_EVENT_PROCESS,
+                                                 (nx_connection_t*) pn_connector_context(cxtr));
+            break;
+
+        default:
+            break;
+        }
+    } while (events > 0);
+}
+
+
 //
 // TEMPORARY FUNCTION PROTOTYPES
 //
@@ -154,6 +246,7 @@ static void *thread_run(void *arg)
 {
     nx_thread_t     *thread = (nx_thread_t*) arg;
     pn_connector_t  *work;
+    pn_connection_t *conn;
     nx_connection_t *ctx;
     int              error;
 
@@ -329,63 +422,7 @@ static void *thread_run(void *arg)
         // Process the connector that we now have exclusive access to.
         //
         if (work) {
-            ctx = pn_connector_context(work);
-            int events = 0;
-            int auth_passes = 0;
-
-            do {
-                //
-                // Step the engine for pre-handler processing
-                //
-                pn_connector_process(work);
-
-                //
-                // Call the handler that is appropriate for the connector's state.
-                //
-                switch (ctx->state) {
-                case CONN_STATE_SASL_SERVER:
-                    if (auth_passes == 0) {
-                        auth_server_handler(work);
-                        events = 1;
-                    } else {
-                        auth_passes++;
-                        events = 0;
-                    }
-                    break;
-
-                case CONN_STATE_OPENING:
-                    ctx->state = CONN_STATE_OPERATIONAL;
-
-                    nx_conn_event_t event;
-
-                    if (ctx->listener) {
-                        event = NX_CONN_EVENT_LISTENER_OPEN;
-                    } else if (ctx->connector) {
-                        event = NX_CONN_EVENT_CONNECTOR_OPEN;
-                    } else
-                        assert(0);
-
-                    nx_server->conn_handler(ctx->context, event, (nx_connection_t*) pn_connector_context(work));
-                    events = 1;
-                    break;
-
-                case CONN_STATE_OPERATIONAL:
-                    if (pn_connector_closed(work)) {
-                        nx_server->conn_handler(ctx->context,
-                                                NX_CONN_EVENT_CLOSE,
-                                                (nx_connection_t*) pn_connector_context(work));
-                        events = 0;
-                    }
-                    else
-                        events = nx_server->conn_handler(nx_server->handler_context,
-                                                         NX_CONN_EVENT_PROCESS,
-                                                         (nx_connection_t*) pn_connector_context(work));
-                    break;
-
-                default:
-                    break;
-                }
-            } while (events > 0);
+            process_connector(work);
 
             //
             // Check to see if the connector was closed during processing
@@ -394,7 +431,12 @@ static void *thread_run(void *arg)
                 //
                 // Connector is closed.  Free the context and the connector.
                 //
-                pn_connection_t *conn = pn_connector_connection(work);
+                conn = pn_connector_connection(work);
+                if (ctx->connector) {
+                    ctx->connector->ctx = 0;
+                    ctx->connector->state = CXTR_STATE_CONNECTING;
+                    nx_timer_schedule(ctx->connector->timer, ctx->connector->delay);
+                }
                 sys_mutex_lock(nx_server->lock);
                 free_nx_connection_t(ctx);
                 pn_connector_free(work);
@@ -458,6 +500,35 @@ static void thread_free(nx_thread_t *thread)
         return;
 
     free(thread);
+}
+
+
+static void cxtr_try_open(void *context)
+{
+    nx_connector_t *ct = (nx_connector_t*) context;
+    if (ct->state != CXTR_STATE_CONNECTING)
+        return;
+
+    nx_connection_t *ctx = new_nx_connection_t();
+    ctx->state        = CONN_STATE_CONNECTING;
+    ctx->owner_thread = CONTEXT_NO_OWNER;
+    ctx->enqueued     = 0;
+    ctx->pn_conn      = 0;
+    ctx->listener     = 0;
+    ctx->connector    = ct;
+    ctx->context      = ct->context;
+    ctx->user_context = 0;
+
+    //
+    // pn_connector is not thread safe
+    //
+    sys_mutex_lock(nx_server->lock);
+    ctx->pn_cxtr = pn_connector(nx_server->driver, ct->config->host, ct->config->port, (void*) ctx);
+    sys_mutex_unlock(nx_server->lock);
+
+    ct->ctx   = ctx;
+    ct->delay = 5000;
+    printf("[Server: Connecting to %s:%s]\n", ct->config->host, ct->config->port);
 }
 
 
@@ -684,18 +755,14 @@ nx_connector_t *nx_server_connect(nx_server_config_t *config, void *context)
     if (!ct)
         return 0;
 
-    ct->config       = config;
-    ct->context      = context;
-    ct->pn_connector = pn_connector(nx_server->driver, config->host, config->port, (void*) ct);
+    ct->state   = CXTR_STATE_CONNECTING;
+    ct->config  = config;
+    ct->context = context;
+    ct->ctx     = 0;
+    ct->timer   = nx_timer(cxtr_try_open, (void*) ct);
+    ct->delay   = 0;
 
-    if (!ct->pn_connector) {
-        printf("[Driver Error %d (%s)]\n",
-               pn_driver_errno(nx_server->driver), pn_driver_error(nx_server->driver));
-        free_nx_connector_t(ct);
-        return 0;
-    }
-    printf("[Server: Connecting to %s:%s]\n", config->host, config->port);
-
+    nx_timer_schedule(ct->timer, ct->delay);
     return ct;
 }
 
@@ -704,13 +771,14 @@ void nx_server_connector_free(nx_connector_t* ct)
 {
     // Don't free the proton connector.  This will be done by the connector
     // processing/cleanup.
+
+    if (ct->ctx) {
+        pn_connector_close(ct->ctx->pn_cxtr);
+        ct->ctx->connector = 0;
+    }
+
+    nx_timer_free(ct->timer);
     free_nx_connector_t(ct);
-}
-
-
-void nx_server_connector_close(nx_connector_t* ct)
-{
-    pn_connector_close(ct->pn_connector);
 }
 
 

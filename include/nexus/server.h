@@ -328,11 +328,4 @@ nx_connector_t *nx_server_connect(nx_server_config_t *config, void *context);
  */
 void nx_connector_free(nx_connector_t* ct);
 
-/**
- * Close a connector.
- *
- * @param ct A connector pointer returned by nx_connect.
- */
-void nx_connector_close(nx_connector_t* ct);
-
 #endif

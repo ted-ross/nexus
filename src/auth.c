@@ -24,11 +24,34 @@
 #include <proton/sasl.h>
 
 
+void auth_client_handler(pn_connector_t *cxtr)
+{
+    pn_sasl_t       *sasl  = pn_connector_sasl(cxtr);
+    pn_sasl_state_t  state = pn_sasl_state(sasl);
+    nx_connection_t *ctx = (nx_connection_t*) pn_connector_context(cxtr);
+
+    if (state == PN_SASL_CONF) {
+        pn_sasl_mechanisms(sasl, "ANONYMOUS");
+        pn_sasl_client(sasl);
+    }
+
+    state = pn_sasl_state(sasl);
+
+    if        (state == PN_SASL_PASS) {
+        printf("client pass\n");
+        ctx->state = CONN_STATE_OPENING;
+    } else if (state == PN_SASL_FAIL) {
+        printf("client fail\n");
+        ctx->state = CONN_STATE_FAILED;
+    }
+}
+
+
 void auth_server_handler(pn_connector_t *cxtr)
 {
     pn_sasl_t       *sasl  = pn_connector_sasl(cxtr);
     pn_sasl_state_t  state = pn_sasl_state(sasl);
-    pn_connection_t *conn;
+    nx_connection_t *ctx = (nx_connection_t*) pn_connector_context(cxtr);
 
     while (state == PN_SASL_CONF || state == PN_SASL_STEP) {
         if        (state == PN_SASL_CONF) {
@@ -45,15 +68,8 @@ void auth_server_handler(pn_connector_t *cxtr)
     }
 
     if        (state == PN_SASL_PASS) {
-        conn = pn_connection();
-        pn_connection_set_container(conn, "nexus"); // TODO - make unique
-        pn_connector_set_connection(cxtr, conn);
-        nx_connection_t *ctx = (nx_connection_t*) pn_connector_context(cxtr);
         ctx->state = CONN_STATE_OPENING;
-        ctx->pn_conn = conn;
-        pn_connection_set_context(conn, ctx);
     } else if (state == PN_SASL_FAIL) {
-        nx_connection_t *ctx = (nx_connection_t*) pn_connector_context(cxtr);
         ctx->state = CONN_STATE_FAILED;
     }
 }

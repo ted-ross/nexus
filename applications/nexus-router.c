@@ -72,6 +72,16 @@ static void startup(void *context)
 
     nx_server_listen(&server_config, 0);
 
+    /*
+    static nx_server_config_t client_config;
+    client_config.host            = "0.0.0.0";
+    client_config.port            = "10000";
+    client_config.sasl_mechanisms = "ANONYMOUS";
+    client_config.ssl_enabled     = 0;
+
+    nx_server_connect(&client_config, 0);
+    */
+
     nx_server_resume();
 }
 
