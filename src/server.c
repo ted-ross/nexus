@@ -202,7 +202,7 @@ static void process_connector(pn_connector_t *cxtr)
             pn_connection_set_context(conn, ctx);
             ctx->pn_conn = conn;
 
-            nx_conn_event_t ce;
+            nx_conn_event_t ce = NX_CONN_EVENT_PROCESS; // Initialize to keep the compiler happy
 
             if (ctx->listener) {
                 ce = NX_CONN_EVENT_LISTENER_OPEN;

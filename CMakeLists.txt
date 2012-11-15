@@ -35,33 +35,33 @@ include_directories(
 ## Build the Multi-Threaded Server Library
 ##
 set(server_SOURCES
+    src/alloc.c
+    src/auth.c
+    src/basic_queue.c
+    src/container.c
+    src/hash.c
+    src/iterator.c
+    src/link_allocator.c
+    src/message.c
     src/posix/threading.c
     src/server.c
-    src/auth.c
-    src/work_queue.c
     src/timer.c
-    src/alloc.c
+    src/work_queue.c
     )
 
 add_library(nexus-server SHARED ${server_SOURCES})
 target_link_libraries(nexus-server ${proton_lib} ${pthread_lib})
 
 ##
-## Build the Container Library
+## Build the Nodes Library
 ##
-set(container_SOURCES
-    src/container.c
-    src/link_allocator.c
-    src/message.c
-    src/hash.c
-    src/basic_queue.c
-    src/router/router_node.c
+set(nodes_SOURCES
     src/router/router_control.c
-    src/iterator.c
+    src/router/router_node.c
     )
 
-add_library(nexus-container SHARED ${container_SOURCES})
-target_link_libraries(nexus-container nexus-server ${proton_lib})
+add_library(nexus-nodes SHARED ${nodes_SOURCES})
+target_link_libraries(nexus-nodes nexus-server)
 
 ##
 ## Build the server application
@@ -71,7 +71,7 @@ set(router_SOURCES
     )
 
 add_executable(nexus-router ${router_SOURCES})
-target_link_libraries(nexus-router nexus-container)
+target_link_libraries(nexus-router nexus-nodes)
 
 ##
 ## Build Tests

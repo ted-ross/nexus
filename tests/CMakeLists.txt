@@ -25,11 +25,8 @@ set(test_SOURCES
     tool_test.c
     timer_test.c
     alloc_test.c
-    ../src/timer.c
-    ../src/alloc.c
-    ../src/posix/threading.c
     )
 
 add_executable(run_tests ${test_SOURCES})
-target_link_libraries(run_tests ${pthread_lib})
+target_link_libraries(run_tests nexus-server)
 
