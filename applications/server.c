@@ -25,18 +25,12 @@
 #include <nexus/basic_queue.h>
 #include <nexus/router.h>
 
-static void thread_start_handler(void* context, int thread_id)
-{
-    printf("[Thread Started - id=%d]\n", thread_id);
-}
-
 
 int main(int argc, char **argv)
 {
     nx_link_allocator_initialize();
+    nx_server_initialize(4);
     container_init();
-
-    nx_server_initialize(4, container_handler, thread_start_handler, 0);
 
     basic_queue_t *queue1 = basic_queue("queue1", 0);
     basic_queue_t *queue2 = basic_queue("queue2", 0);

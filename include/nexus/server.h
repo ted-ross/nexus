@@ -94,16 +94,8 @@ typedef int (*nx_conn_handler_cb_t)(void* context, nx_conn_event_t event, nx_con
  * Initialize the server module and prepare it for operation.
  *
  * @param thread_count The number of worker threads (1 or more) that the server shall create
- * @param conn_hander The handler for processing an operational connection
- * @param close_handler The handler for a connection who's transport has closed
- * @param start_handler The thread-start handler invoked per thread on thread startup
- * @param handler_context Opaque context to be passed back in the callback functions
  */
-void nx_server_initialize(int                     thread_count,
-                          nx_conn_handler_cb_t    conn_handler,
-                          nx_signal_handler_cb_t  signal_handler,
-                          nx_thread_start_cb_t    start_handler,
-                          void                   *handler_context);
+void nx_server_initialize(int thread_count);
 
 
 /**
@@ -112,6 +104,36 @@ void nx_server_initialize(int                     thread_count,
  * Finalize the server after it has stopped running.
  */
 void nx_server_finalize(void);
+
+
+/**
+ * Set the connection handler callback for the server.  This callback is mandatory and must be set
+ * prior to the invocation of nx_server_run.
+ *
+ * @param conn_hander The handler for processing connection-related events.
+ */
+void nx_server_set_conn_handler(nx_conn_handler_cb_t conn_handler);
+
+
+/**
+ * Set the signal handler for the server.  The signal handler is invoked cleanly on a worker thread
+ * after the server process catches an operating-system signal.  The signal handler is optional and
+ * need not be set.
+ *
+ * @param signal_handler The signal handler called when a registered signal is caught.
+ * @param context Opaque context to be passed back in the callback function.
+ */
+void nx_server_set_signal_handler(nx_signal_handler_cb_t signal_handler, void *context);
+
+
+/**
+ * Set the thread-start handler.  This handler is called once on each worker thread at the time
+ * the thread is started.  This may be used to set tuning settings like processor affinity, etc.
+ *
+ * @param start_handler The thread-start handler invoked per thread on thread startup.
+ * @param context Opaque context to be passed back in the callback function.
+ */
+void nx_server_set_start_handler(nx_thread_start_cb_t start_handler, void *context);
 
 
 /**

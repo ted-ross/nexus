@@ -43,7 +43,9 @@ typedef struct nx_server_t {
     nx_thread_start_cb_t    start_handler;
     nx_conn_handler_cb_t    conn_handler;
     nx_signal_handler_cb_t  signal_handler;
-    void                   *handler_context;
+    void                   *start_context;
+    void                   *conn_context;
+    void                   *signal_context;
     sys_cond_t             *cond;
     sys_mutex_t            *lock;
     nx_thread_t           **threads;
@@ -122,9 +124,11 @@ static void handle_signals_LH(void)
 
     if (signum) {
         nx_server->pending_signal = 0;
-        sys_mutex_unlock(nx_server->lock);
-        nx_server->signal_handler(nx_server->handler_context, signum);
-        sys_mutex_lock(nx_server->lock);
+        if (nx_server->signal_handler) {
+            sys_mutex_unlock(nx_server->lock);
+            nx_server->signal_handler(nx_server->signal_context, signum);
+            sys_mutex_lock(nx_server->lock);
+        }
     }
 }
 
@@ -220,7 +224,7 @@ static void process_connector(pn_connector_t *cxtr)
                 events = 0;
             }
             else
-                events = nx_server->conn_handler(nx_server->handler_context,
+                events = nx_server->conn_handler(ctx->context,
                                                  NX_CONN_EVENT_PROCESS,
                                                  (nx_connection_t*) pn_connector_context(cxtr));
             break;
@@ -260,7 +264,7 @@ static void *thread_run(void *arg)
     // This handler can be used to set NUMA or processor affinnity for the thread.
     //
     if (nx_server->start_handler)
-        nx_server->start_handler(nx_server->handler_context, thread->thread_id);
+        nx_server->start_handler(nx_server->start_context, thread->thread_id);
 
     //
     // Main Loop
@@ -532,11 +536,7 @@ static void cxtr_try_open(void *context)
 }
 
 
-void nx_server_initialize(int                     thread_count,
-                          nx_conn_handler_cb_t    conn_handler,
-                          nx_signal_handler_cb_t  signal_handler,
-                          nx_thread_start_cb_t    start_handler,
-                          void                   *handler_context)
+void nx_server_initialize(int thread_count)
 {
     int i;
 
@@ -551,10 +551,11 @@ void nx_server_initialize(int                     thread_count,
 
     nx_server->thread_count    = thread_count;
     nx_server->driver          = pn_driver();
-    nx_server->start_handler   = start_handler;
-    nx_server->conn_handler    = conn_handler;
-    nx_server->signal_handler  = signal_handler;
-    nx_server->handler_context = handler_context;
+    nx_server->start_handler   = 0;
+    nx_server->conn_handler    = 0;
+    nx_server->signal_handler  = 0;
+    nx_server->start_context   = 0;
+    nx_server->signal_context  = 0;
     nx_server->lock            = sys_mutex();
     nx_server->cond            = sys_cond();
 
@@ -595,11 +596,33 @@ void nx_server_finalize(void)
 }
 
 
+void nx_server_set_conn_handler(nx_conn_handler_cb_t handler)
+{
+    nx_server->conn_handler = handler;
+}
+
+
+void nx_server_set_signal_handler(nx_signal_handler_cb_t handler, void *context)
+{
+    nx_server->signal_handler = handler;
+    nx_server->signal_context = context;
+}
+
+
+void nx_server_set_start_handler(nx_thread_start_cb_t handler, void *context)
+{
+    nx_server->start_handler = handler;
+    nx_server->start_context = context;
+}
+
+
 void nx_server_run(void)
 {
     int i;
     if (!nx_server)
         return;
+
+    assert(nx_server->conn_handler); // Server can't run without a connection handler.
 
     for (i = 1; i < nx_server->thread_count; i++)
         thread_start(nx_server->threads[i]);

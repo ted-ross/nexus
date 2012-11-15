@@ -37,19 +37,6 @@ static hash_t           *node_map;
 static sys_mutex_t      *lock;
 static container_node_t *default_node;
 
-void container_init(void)
-{
-    printf("[Container Initializing]\n");
-
-    const nx_allocator_config_t *alloc_config = nx_allocator_default_config();
-    nx_allocator_initialize(alloc_config);
-
-    node_map = hash_initialize(10, 32); // 1K buckets, item batches of 32
-    lock = sys_mutex();
-    default_node = 0;
-}
-
-
 static void container_setup_outgoing_link(pn_link_t *link)
 {
     sys_mutex_lock(lock);
@@ -318,7 +305,7 @@ static int container_process_handler(void* unused, pn_connection_t *conn)
 }
 
 
-int container_handler(void* context, nx_conn_event_t event, nx_connection_t *nx_conn)
+static int container_handler(void* context, nx_conn_event_t event, nx_connection_t *nx_conn)
 {
     pn_connection_t *conn = nx_connection_get_engine(nx_conn);
 
@@ -330,6 +317,20 @@ int container_handler(void* context, nx_conn_event_t event, nx_connection_t *nx_
     }
 
     return 0;
+}
+
+
+void container_init(void)
+{
+    printf("[Container Initializing]\n");
+
+    const nx_allocator_config_t *alloc_config = nx_allocator_default_config();
+    nx_allocator_initialize(alloc_config);
+
+    node_map = hash_initialize(10, 32); // 1K buckets, item batches of 32
+    lock = sys_mutex();
+    default_node = 0;
+    nx_server_set_conn_handler(container_handler);
 }
 
 

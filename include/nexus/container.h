@@ -40,8 +40,6 @@ typedef struct {
 } node_descriptor_t;
 
 void container_init(void);
-int  container_handler(void* context, nx_conn_event_t event, nx_connection_t *conn);
-
 container_node_t *container_register_node(node_descriptor_t desc);
 int container_unregister_node(container_node_t *node);
 void container_set_link_context(pn_link_t *link, void *link_context);
