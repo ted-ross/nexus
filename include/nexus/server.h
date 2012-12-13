@@ -24,6 +24,7 @@
 typedef struct nx_listener_t nx_listener_t;
 typedef struct nx_connector_t nx_connector_t;
 typedef struct nx_connection_t nx_connection_t;
+typedef struct nx_user_fd_t nx_user_fd_t;
 
 /**
  * Event type for the connection callback.
@@ -89,6 +90,18 @@ typedef int (*nx_conn_handler_cb_t)(void* context, nx_conn_event_t event, nx_con
 
 
 /**
+ * User_fd Handler
+ *
+ * Callback invoked when a user-managed file descriptor is available for reading or writing or there
+ * was an error on the file descriptor.
+ *
+ * @param context The handler context supplied in the nx_user_fd call.
+ * @param ufd The user_fd handle for the processable fd.
+ */
+typedef void (*nx_user_fd_handler_cb_t)(void* context, nx_user_fd_t *ufd);
+
+
+/**
  * Server Initializer
  *
  * Initialize the server module and prepare it for operation.
@@ -114,6 +127,11 @@ void nx_server_finalize(void);
  */
 void nx_server_set_conn_handler(nx_conn_handler_cb_t conn_handler);
 
+/**
+ * Set the user-fd handler callback for the server.  This handler is optional, but must be supplied
+ * if the nx_server is used to manage the activation of user file descriptors.
+ */
+void nx_server_set_user_fd_handler(nx_user_fd_handler_cb_t ufd_handler);
 
 /**
  * Set the signal handler for the server.  The signal handler is invoked cleanly on a worker thread
@@ -349,5 +367,67 @@ nx_connector_t *nx_server_connect(nx_server_config_t *config, void *context);
  * @param ct A connector pointer returned by nx_connect.
  */
 void nx_connector_free(nx_connector_t* ct);
+
+/**
+ * Create a tracker for a user-managed file descriptor.
+ *
+ * A user-fd is appropriate for use when the application opens and manages file descriptors
+ * for purposes other than AMQP communication.  Registering a user fd with the nexus server
+ * controls processing of the FD alongside the FDs used for messaging.
+ *
+ * @param fd The open file descriptor being managed by the application.
+ * @param context User context passed back in the connection handler.
+ * @return A pointer to the new user_fd.
+ */
+nx_user_fd_t *nx_user_fd(int fd, void *context);
+
+/**
+ * Free the resources for a user-managed FD tracker.
+ *
+ * @param ufd Structure pointer returned by nx_user_fd.
+ */
+void nx_user_fd_free(nx_user_fd_t *ufd);
+
+/**
+ * Activate a user-fd for read.
+ *
+ * Use this activation when the application has capacity to receive data from the user-fd.  This will
+ * cause the callback set in nx_server_set_user_fd_handler to later be invoked when the
+ * file descriptor has data to read.
+ *
+ * @param ufd Structure pointer returned by nx_user_fd.
+ */
+void nx_user_fd_activate_read(nx_user_fd_t *ufd);
+
+/**
+ * Activate a user-fd for write.
+ *
+ * Use this activation when the application has data to write via the user-fd.  This will
+ * cause the callback set in nx_server_set_user_fd_handler to later be invoked when the
+ * file descriptor is writable.
+ *
+ * @param ufd Structure pointer returned by nx_user_fd.
+ */
+void nx_user_fd_activate_write(nx_user_fd_t *ufd);
+
+/**
+ * Check readable status of a user-fd
+ *
+ * Note: It is possible that readable status is spurious (i.e. this function returns true
+ *       but the file-descriptor is not readable and will block if not set to O_NONBLOCK).
+ *       Code accordingly.
+ *
+ * @param ufd Structure pointer returned by nx_user_fd.
+ * @return true iff the user file descriptor is readable.
+ */
+bool nx_user_fd_is_readable(nx_user_fd_t *ufd);
+
+/**
+ * Check writable status of a user-fd
+ *
+ * @param ufd Structure pointer returned by nx_user_fd.
+ * @return true iff the user file descriptor is writable.
+ */
+bool nx_user_fd_is_writeable(nx_user_fd_t *ufd);
 
 #endif

@@ -20,6 +20,7 @@
 int tool_tests();
 int timer_tests();
 int alloc_tests();
+int server_tests();
 
 int main(int argc, char** argv)
 {
@@ -27,6 +28,7 @@ int main(int argc, char** argv)
     result += tool_tests();
     result += timer_tests();
     result += alloc_tests();
+    result += server_tests();
     return result;
 }
 

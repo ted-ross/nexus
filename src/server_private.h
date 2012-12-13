@@ -34,7 +34,8 @@ typedef enum {
     CONN_STATE_SASL_SERVER,
     CONN_STATE_OPENING,
     CONN_STATE_OPERATIONAL,
-    CONN_STATE_FAILED
+    CONN_STATE_FAILED,
+    CONN_STATE_USER
 } conn_state_t;
 
 #define CONTEXT_NO_OWNER -1
@@ -73,12 +74,21 @@ struct nx_connection_t {
     nx_connector_t  *connector;
     void            *context; // Copy of context from listener or connector
     void            *user_context;
+    nx_user_fd_t    *ufd;
+};
+
+
+struct nx_user_fd_t {
+    void           *context;
+    int             fd;
+    pn_connector_t *pn_conn;
 };
 
 
 ALLOC_DECLARE(nx_listener_t);
 ALLOC_DECLARE(nx_connector_t);
 ALLOC_DECLARE(nx_connection_t);
+ALLOC_DECLARE(nx_user_fd_t);
 
 
 #endif

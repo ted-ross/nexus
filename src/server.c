@@ -32,38 +32,41 @@
 typedef struct nx_thread_t {
     int           thread_id;
     volatile int  running;
+    volatile int  canceled;
     int           using_thread;
     sys_thread_t *thread;
 } nx_thread_t;
 
 
 typedef struct nx_server_t {
-    int                     thread_count;
-    pn_driver_t            *driver;
-    nx_thread_start_cb_t    start_handler;
-    nx_conn_handler_cb_t    conn_handler;
-    nx_signal_handler_cb_t  signal_handler;
-    void                   *start_context;
-    void                   *conn_context;
-    void                   *signal_context;
-    sys_cond_t             *cond;
-    sys_mutex_t            *lock;
-    nx_thread_t           **threads;
-    work_queue_t           *work_queue;
-    nx_timer_list_t         pending_timers;
-    bool                    a_thread_is_waiting;
-    int                     threads_active;
-    int                     pause_requests;
-    int                     threads_paused;
-    int                     pause_next_sequence;
-    int                     pause_now_serving;
-    int                     pending_signal;
+    int                      thread_count;
+    pn_driver_t             *driver;
+    nx_thread_start_cb_t     start_handler;
+    nx_conn_handler_cb_t     conn_handler;
+    nx_signal_handler_cb_t   signal_handler;
+    nx_user_fd_handler_cb_t  ufd_handler;
+    void                    *start_context;
+    void                    *conn_context;
+    void                    *signal_context;
+    sys_cond_t              *cond;
+    sys_mutex_t             *lock;
+    nx_thread_t            **threads;
+    work_queue_t            *work_queue;
+    nx_timer_list_t          pending_timers;
+    bool                     a_thread_is_waiting;
+    int                      threads_active;
+    int                      pause_requests;
+    int                      threads_paused;
+    int                      pause_next_sequence;
+    int                      pause_now_serving;
+    int                      pending_signal;
 } nx_server_t;
 
 
 ALLOC_DEFINE(nx_listener_t);
 ALLOC_DEFINE(nx_connector_t);
 ALLOC_DEFINE(nx_connection_t);
+ALLOC_DEFINE(nx_user_fd_t);
 
 
 /**
@@ -87,6 +90,7 @@ static nx_thread_t *thread(int id)
 
     thread->thread_id    = id;
     thread->running      = 0;
+    thread->canceled     = 0;
     thread->using_thread = 0;
 
     return thread;
@@ -111,6 +115,7 @@ static void thread_process_listeners(pn_driver_t *driver)
         ctx->listener     = (nx_listener_t*) pn_listener_context(listener);
         ctx->connector    = 0;
         ctx->context      = ctx->listener->context;
+        ctx->ufd          = 0;
 
         pn_connector_set_context(cxtr, ctx);
         listener = pn_driver_listener(driver);
@@ -150,6 +155,11 @@ static void process_connector(pn_connector_t *cxtr)
     nx_connection_t *ctx = pn_connector_context(cxtr);
     int events      = 0;
     int auth_passes = 0;
+
+    if (ctx->state == CONN_STATE_USER) {
+        nx_server->ufd_handler(ctx->ufd->context, ctx->ufd);
+        return;
+    }
 
     do {
         //
@@ -258,6 +268,9 @@ static void *thread_run(void *arg)
         return 0;
 
     thread->running = 1;
+
+    if (thread->canceled)
+        return 0;
 
     //
     // Invoke the start handler if the application supplied one.
@@ -465,6 +478,7 @@ static void *thread_run(void *arg)
             pn_driver_wakeup(nx_server->driver);
         }
     }
+
     return 0;
 }
 
@@ -484,7 +498,8 @@ static void thread_cancel(nx_thread_t *thread)
     if (!thread)
         return;
 
-    thread->running = 0;
+    thread->running  = 0;
+    thread->canceled = 1;
 }
 
 
@@ -522,6 +537,7 @@ static void cxtr_try_open(void *context)
     ctx->connector    = ct;
     ctx->context      = ct->context;
     ctx->user_context = 0;
+    ctx->ufd          = 0;
 
     //
     // pn_connector is not thread safe
@@ -554,6 +570,7 @@ void nx_server_initialize(int thread_count)
     nx_server->start_handler   = 0;
     nx_server->conn_handler    = 0;
     nx_server->signal_handler  = 0;
+    nx_server->ufd_handler     = 0;
     nx_server->start_context   = 0;
     nx_server->signal_context  = 0;
     nx_server->lock            = sys_mutex();
@@ -566,6 +583,7 @@ void nx_server_initialize(int thread_count)
         nx_server->threads[i] = thread(i);
 
     nx_server->work_queue          = work_queue();
+    DEQ_INIT(nx_server->pending_timers);
     nx_server->a_thread_is_waiting = false;
     nx_server->threads_active      = 0;
     nx_server->pause_requests      = 0;
@@ -586,7 +604,6 @@ void nx_server_finalize(void)
         thread_free(nx_server->threads[i]);
 
     work_queue_free(nx_server->work_queue);
-    DEQ_INIT(nx_server->pending_timers);
 
     pn_driver_free(nx_server->driver);
     sys_mutex_free(nx_server->lock);
@@ -616,6 +633,12 @@ void nx_server_set_start_handler(nx_thread_start_cb_t handler, void *context)
 }
 
 
+void nx_server_set_user_fd_handler(nx_user_fd_handler_cb_t ufd_handler)
+{
+    nx_server->ufd_handler = ufd_handler;
+}
+
+
 void nx_server_run(void)
 {
     int i;
@@ -638,11 +661,12 @@ void nx_server_stop(void)
 {
     int idx;
 
+    sys_mutex_lock(nx_server->lock);
     for (idx = 0; idx < nx_server->thread_count; idx++)
         thread_cancel(nx_server->threads[idx]);
-
     sys_cond_signal_all(nx_server->cond);
     pn_driver_wakeup(nx_server->driver);
+    sys_mutex_unlock(nx_server->lock);
 }
 
 
@@ -802,6 +826,63 @@ void nx_server_connector_free(nx_connector_t* ct)
 
     nx_timer_free(ct->timer);
     free_nx_connector_t(ct);
+}
+
+
+nx_user_fd_t *nx_user_fd(int fd, void *context)
+{
+    nx_user_fd_t *ufd = new_nx_user_fd_t();
+
+    if (!ufd)
+        return 0;
+
+    nx_connection_t *ctx = new_nx_connection_t();
+    ctx->state        = CONN_STATE_USER;
+    ctx->owner_thread = CONTEXT_NO_OWNER;
+    ctx->enqueued     = 0;
+    ctx->pn_conn      = 0;
+    ctx->listener     = 0;
+    ctx->connector    = 0;
+    ctx->context      = 0;
+    ctx->user_context = 0;
+    ctx->ufd          = ufd;
+
+    ufd->context = context;
+    ufd->fd      = fd;
+    ufd->pn_conn = pn_connector_fd(nx_server->driver, fd, (void*) ctx);
+
+    return ufd;
+}
+
+
+void nx_user_fd_free(nx_user_fd_t *ufd)
+{
+    pn_connector_close(ufd->pn_conn);
+    free_nx_user_fd_t(ufd);
+}
+
+
+void nx_user_fd_activate_read(nx_user_fd_t *ufd)
+{
+    pn_connector_activate(ufd->pn_conn, PN_CONNECTOR_READABLE);
+}
+
+
+void nx_user_fd_activate_write(nx_user_fd_t *ufd)
+{
+    pn_connector_activate(ufd->pn_conn, PN_CONNECTOR_WRITABLE);
+}
+
+
+bool nx_user_fd_is_readable(nx_user_fd_t *ufd)
+{
+    return pn_connector_activated(ufd->pn_conn, PN_CONNECTOR_READABLE);
+}
+
+
+bool nx_user_fd_is_writeable(nx_user_fd_t *ufd)
+{
+    return pn_connector_activated(ufd->pn_conn, PN_CONNECTOR_WRITABLE);
 }
 
 

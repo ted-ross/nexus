@@ -74,8 +74,10 @@ nx_timer_t *nx_timer(nx_timer_cb_t cb, void* context)
     timer = DEQ_HEAD(free_list);
     if (timer) {
         DEQ_REMOVE_HEAD(free_list);
-    } else
+    } else {
         timer = NEW(nx_timer_t);
+        DEQ_ITEM_INIT(timer);
+    }
 
     if (timer) {
         timer->handler    = cb;

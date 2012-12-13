@@ -25,6 +25,7 @@ set(test_SOURCES
     tool_test.c
     timer_test.c
     alloc_test.c
+    server_test.c
     )
 
 add_executable(run_tests ${test_SOURCES})
