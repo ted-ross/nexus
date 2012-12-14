@@ -18,18 +18,45 @@
 ##
 
 cmake_minimum_required(VERSION 2.6)
-set(CMAKE_C_FLAGS "-pthread -Wall -Werror")
+include(CheckLibraryExists)
+include(CheckSymbolExists)
 
 project(nexus C)
-find_library(proton_lib qpid-proton)
-find_library(pthread_lib pthread)
-find_path(proton_include proton/driver.h)
+
+set (SO_VERSION_MAJOR 0)
+set (SO_VERSION_MINOR 1)
+set (SO_VERSION "${SO_VERSION_MAJOR}.${SO_VERSION_MINOR}")
+
+if (NOT DEFINED LIB_SUFFIX)
+    get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
+    if ("${LIB64}" STREQUAL "TRUE" AND ${CMAKE_SIZEOF_VOID_P} STREQUAL "8")
+        set(LIB_SUFFIX 64)
+    else()
+        set(LIB_SUFFIX "")
+    endif()
+endif()
+
+set(INCLUDE_INSTALL_DIR include CACHE PATH "Include file directory")
+set(LIB_INSTALL_DIR "lib${LIB_SUFFIX}" CACHE PATH "Library object file directory")
+set(SYSCONF_INSTALL_DIR etc CACHE PATH "System read only configuration directory")
+set(SHARE_INSTALL_DIR share CACHE PATH "Shared read only data directory")
+set(MAN_INSTALL_DIR share/man CACHE PATH "Manpage directory")
 
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${proton_include}
     )
+
+##
+## Find dependencies
+##
+find_library(proton_lib qpid-proton)
+find_library(pthread_lib pthread)
+find_path(proton_include proton/driver.h)
+
+set(CMAKE_C_FLAGS "-pthread -Wall -Werror")
+set(CATCH_UNDEFINED "-Wl,--no-undefined")
 
 ##
 ## Build the Multi-Threaded Server Library
@@ -51,6 +78,15 @@ set(server_SOURCES
 
 add_library(nexus-server SHARED ${server_SOURCES})
 target_link_libraries(nexus-server ${proton_lib} ${pthread_lib})
+set_target_properties(nexus-server PROPERTIES
+                      VERSION "${SO_VERSION}"
+                      SOVERSION "${SO_VERSION_MAJOR}"
+                      LINK_FLAGS "${CATCH_UNDEFINED}"
+                      )
+install(TARGETS nexus-server
+        LIBRARY DESTINATION ${LIB_INSTALL_DIR})
+file(GLOB headers "include/nexus/*.h")
+install(FILES ${headers} DESTINATION ${INCLUDE_INSTALL_DIR}/nexus)
 
 ##
 ## Build the Nodes Library
