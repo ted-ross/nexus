@@ -44,5 +44,6 @@ container_node_t *container_register_node(node_descriptor_t desc);
 int container_unregister_node(container_node_t *node);
 void container_set_link_context(pn_link_t *link, void *link_context);
 void *container_get_link_context(pn_link_t *link);
+void container_activate_link(pn_link_t *link);
 
 #endif

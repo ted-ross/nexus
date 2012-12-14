@@ -715,20 +715,8 @@ void nx_server_resume(void)
 }
 
 
-void nx_server_activate(pn_link_t *link)
+void nx_server_activate(nx_connection_t *ctx)
 {
-    if (!link)
-        return;
-
-    pn_session_t *sess = pn_link_session(link);
-    if (!sess)
-        return;
-
-    pn_connection_t *conn = pn_session_connection(sess);
-    if (!conn)
-        return;
-
-    nx_connection_t *ctx = pn_connection_get_context(conn);
     if (!ctx)
         return;
 

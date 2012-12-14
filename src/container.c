@@ -404,3 +404,24 @@ void *container_get_link_context(pn_link_t *link)
     return 0;
 }
 
+
+void container_activate_link(pn_link_t *link)
+{
+    if (!link)
+        return;
+
+    pn_session_t *sess = pn_link_session(link);
+    if (!sess)
+        return;
+
+    pn_connection_t *conn = pn_session_connection(sess);
+    if (!conn)
+        return;
+
+    nx_connection_t *ctx = pn_connection_get_context(conn);
+    if (!ctx)
+        return;
+
+    nx_server_activate(ctx);
+}
+

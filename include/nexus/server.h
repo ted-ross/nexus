@@ -199,15 +199,15 @@ void nx_server_resume(void);
 /**
  * Activate a connection for output.
  *
- * This function is used to request that the server activate the connection associated
- * with the supplied link.  It is assumed that the link is associated with a connection
- * that the caller does not have permission to access (i.e. it may be owned by another
- * thread currently).  An activated connection will, when writable, appear in the work
- * list and be invoked for processing by a worker thread.
+ * This function is used to request that the server activate the indicated connection.
+ * It is assumed that the connection is one that the caller does not have permission to
+ * access (i.e. it may be owned by another thread currently).  An activated connection
+ * will, when writable, appear in the work list and be invoked for processing by a worker
+ * thread.
  *
- * @param link The link over which the application wishes to send data
+ * @param conn The connection over which the application wishes to send data
  */
-void nx_server_activate(pn_link_t *link);
+void nx_server_activate(nx_connection_t *conn);
 
 
 /**

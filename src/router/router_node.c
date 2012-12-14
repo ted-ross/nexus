@@ -128,7 +128,7 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery, void *link
             if (result == 0) {
                 DEQ_INSERT_TAIL(rlink->out_fifo, msg);
                 pn_link_offered(rlink->link, DEQ_SIZE(rlink->out_fifo));
-                nx_server_activate(rlink->link);
+                container_activate_link(rlink->link);
             } else {
                 pn_delivery_update(delivery, PN_RELEASED);
                 pn_delivery_settle(delivery);
@@ -168,7 +168,7 @@ static void router_disp_handler(void* context, pn_delivery_t *delivery, void *li
             }
 
             if (activate)
-                nx_server_activate(pn_delivery_link(activate));
+                container_activate_link(pn_delivery_link(activate));
 
             return;
         }
