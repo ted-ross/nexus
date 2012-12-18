@@ -24,8 +24,8 @@
 
 typedef struct hash_t hash_t;
 
-hash_t *hash_initialize(int bucket_exponent, int batch_size);
-void hash_finalize(hash_t *h);
+hash_t *hash(int bucket_exponent, int batch_size, int value_is_const);
+void hash_free(hash_t *h);
 
 size_t hash_size(hash_t *h);
 int    hash_insert(hash_t *h, nx_field_iterator_t *key, void *val);

@@ -47,6 +47,7 @@ struct hash_t {
     unsigned int  bucket_mask;
     int           batch_size;
     size_t        size;
+    int           is_const;
 };
 
 
@@ -76,7 +77,7 @@ static void hash_allocate_item_batch(hash_t *h)
 }
 
 
-hash_t *hash_initialize(int bucket_exponent, int batch_size)
+hash_t *hash(int bucket_exponent, int batch_size, int value_is_const)
 {
     int i;
     hash_t *h = NEW(hash_t);
@@ -89,6 +90,7 @@ hash_t *hash_initialize(int bucket_exponent, int batch_size)
     h->bucket_mask  = h->bucket_count - 1;
     h->batch_size   = batch_size;
     h->size         = 0;
+    h->is_const     = value_is_const;
     h->buckets = NEW_ARRAY(bucket_t, h->bucket_count);
     for (i = 0; i < h->bucket_count; i++) {
         DEQ_INIT(h->buckets[i].items);
@@ -98,7 +100,7 @@ hash_t *hash_initialize(int bucket_exponent, int batch_size)
 }
 
 
-void hash_finalize(hash_t *h)
+void hash_free(hash_t *h)
 {
     // TODO - Implement this
 }
@@ -160,6 +162,9 @@ int hash_insert(hash_t *h, nx_field_iterator_t *key, void *val)
 
 int hash_insert_const(hash_t *h, nx_field_iterator_t *key, const void *val)
 {
+    if (!h->is_const)
+        return -3;
+
     int     error = 0;
     item_t *item  = hash_internal_insert(h, key, &error);
 
@@ -197,6 +202,9 @@ int hash_retrieve(hash_t *h, nx_field_iterator_t *key, void **val)
 
 int hash_retrieve_const(hash_t *h, nx_field_iterator_t *key, const void **val)
 {
+    if (!h->is_const)
+        return -3;
+
     item_t *item = hash_internal_retrieve(h, key);
     if (item) {
         *val = item->v.val_const;

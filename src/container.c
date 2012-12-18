@@ -335,8 +335,8 @@ void nx_container_initialize(void)
     const nx_allocator_config_t *alloc_config = nx_allocator_default_config();
     nx_allocator_initialize(alloc_config);
 
-    node_type_map = hash_initialize(6,  4);  // 64 buckets, item batches of 4
-    node_map      = hash_initialize(10, 32); // 1K buckets, item batches of 32
+    node_type_map = hash(6,  4, 1);  // 64 buckets, item batches of 4
+    node_map      = hash(10, 32, 0); // 1K buckets, item batches of 32
     lock          = sys_mutex();
     default_node  = 0;
 

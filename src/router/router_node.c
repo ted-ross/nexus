@@ -339,7 +339,7 @@ nx_router_t *nx_router(nx_router_configuration_t *config)
     router->timer = nx_timer(nx_router_timer_handler, (void*) router);
     nx_timer_schedule(router->timer, 0); // Immediate
 
-    router->out_hash = hash_initialize(10, 32);
+    router->out_hash = hash(10, 32, 0);
     router->dtag = 1;
 
     return router;
