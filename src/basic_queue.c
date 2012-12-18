@@ -25,11 +25,29 @@
 #include <nexus/ctools.h>
 #include <nexus/hash.h>
 #include <nexus/link_allocator.h>
+#include <nexus/container.h>
 
+static void bq_rx_handler(void* context, pn_delivery_t *delivery, void *link_context);
+static void bq_tx_handler(void* context, pn_delivery_t *delivery, void *link_context);
+static void bq_disp_handler(void* context, pn_delivery_t *delivery, void *link_context);
+static int  bq_incoming_link_handler(void* context, pn_link_t *link);
+static int  bq_outgoing_link_handler(void* context, pn_link_t *link);
+static int  bq_writable_link_handler(void* context, pn_link_t *link);
+static int  bq_link_detach_handler(void* context, pn_link_t *link, int closed);
+
+static nx_node_type_t bq_node = {"basic_queue", 0, 1,
+                                 bq_rx_handler,
+                                 bq_tx_handler,
+                                 bq_disp_handler,
+                                 bq_incoming_link_handler,
+                                 bq_outgoing_link_handler,
+                                 bq_writable_link_handler,
+                                 bq_link_detach_handler };
+static int type_registered = 0;
 
 struct basic_queue_t {
-    node_descriptor_t            desc;
-    container_node_t            *node;
+    char                        *name;
+    nx_node_t                   *node;
     basic_queue_configuration_t *config;
     nx_link_list_t               in_links;
     nx_link_list_t               out_links;
@@ -45,7 +63,7 @@ static size_t enqueue_message_LH(basic_queue_t *bq, nx_message_t *msg)
 {
     DEQ_INSERT_TAIL(bq->fifo, msg);
 
-    printf("[Basic Queue %s: Message Enqueued, depth=%d]\n", bq->desc.name, (int) DEQ_SIZE(bq->fifo));
+    printf("[Basic Queue %s: Message Enqueued, depth=%d]\n", bq->name, (int) DEQ_SIZE(bq->fifo));
     return DEQ_SIZE(bq->fifo);
 }
 
@@ -86,7 +104,7 @@ static void bq_tx_handler(void* context, pn_delivery_t *delivery, void *link_con
     pn_link_offered(link, size);
 
     printf("[Basic Queue %s: Message Dequeued, depth=%d in=%ld out=%ld]\n",
-           bq->desc.name, (int) size, bq->in_messages, bq->out_messages);
+           bq->name, (int) size, bq->in_messages, bq->out_messages);
 }
 
 
@@ -152,7 +170,7 @@ static int bq_incoming_link_handler(void* context, pn_link_t *link)
     sys_mutex_lock(bq->lock);
     if (item) {
         printf("[Basic Queue %s: Opening Incoming Link - name=%s source=%s target=%s]\n", 
-               bq->desc.name, name, r_src, r_tgt);
+               bq->name, name, r_src, r_tgt);
 
         DEQ_INSERT_TAIL(bq->in_links, item);
 
@@ -179,7 +197,7 @@ static int bq_outgoing_link_handler(void* context, pn_link_t *link)
     sys_mutex_lock(bq->lock);
     if (item) {
         printf("[Basic Queue %s: Opening Outgoing Link - name=%s source=%s target=%s]\n",
-               bq->desc.name, name, r_src, r_tgt);
+               bq->name, name, r_src, r_tgt);
 
         DEQ_INSERT_TAIL(bq->out_links, item);
 
@@ -209,7 +227,7 @@ static int bq_writable_link_handler(void* context, pn_link_t *link)
         pn_delivery(link, pn_dtag("delivery-xxx", 13)); // TODO - use a unique delivery tag
         delivery = pn_link_current(link);
         if (delivery) {
-            void *link_context = container_get_link_context(link);
+            void *link_context = nx_container_get_link_context(link);
             bq_tx_handler(context, delivery, link_context);
             return 1;
         }
@@ -227,7 +245,7 @@ static int bq_link_detach_handler(void* context, pn_link_t *link, int closed)
     nx_link_item_t *item;
 
     printf("[Basic Queue %s: Link Closed - name=%s source=%s target=%s]\n",
-           bq->desc.name, name, r_src, r_tgt);
+           bq->name, name, r_src, r_tgt);
 
     sys_mutex_lock(bq->lock);
     if (pn_link_is_sender(link))
@@ -255,19 +273,15 @@ static int bq_link_detach_handler(void* context, pn_link_t *link, int closed)
 
 basic_queue_t *basic_queue(char *name, basic_queue_configuration_t *config)
 {
+    if (!type_registered) {
+        type_registered = 1;
+        nx_container_register_node_type(&bq_node);
+    }
+
     basic_queue_t *bq = NEW(basic_queue_t);
 
-    bq->desc.name                = name;
-    bq->desc.context             = (void*) bq;
-    bq->desc.rx_handler          = bq_rx_handler;
-    bq->desc.tx_handler          = bq_tx_handler;
-    bq->desc.disp_handler        = bq_disp_handler;
-    bq->desc.incoming_handler    = bq_incoming_link_handler;
-    bq->desc.outgoing_handler    = bq_outgoing_link_handler;
-    bq->desc.writable_handler    = bq_writable_link_handler;
-    bq->desc.link_detach_handler = bq_link_detach_handler;
-
-    bq->node = container_register_node(bq->desc);
+    bq->name = name;
+    bq->node = nx_container_create_node(&bq_node, name, (void*) bq, NX_DIST_BOTH, NX_LIFE_PERMANENT);
     if (!bq->node) {
         free(bq);
         return 0;
@@ -298,7 +312,7 @@ void basic_queue_free(basic_queue_t *bq)
 
 void bq_finalize(basic_queue_t *bq)
 {
-    container_unregister_node(bq->node);
+    nx_container_destroy_node(bq->node);
     sys_mutex_free(bq->lock);
     // TODO - Close all attached links
     free(bq);

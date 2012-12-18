@@ -90,12 +90,12 @@ int main(int argc, char **argv)
 {
     nx_link_allocator_initialize();
     nx_server_initialize(4);
-    container_init();
+    nx_container_initialize();
 
     nx_server_set_signal_handler(signal_handler, 0);
     nx_server_set_start_handler(thread_start_handler, 0);
 
-    nx_router_t *router = nx_router("*", 0);
+    nx_router_t *router = nx_router(0);
 
     nx_timer_t *startup_timer = nx_timer(startup, 0);
     nx_timer_schedule(startup_timer, 0);

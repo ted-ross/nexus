@@ -29,7 +29,7 @@ typedef struct {
     size_t  memory_limit;
 } nx_router_configuration_t;
 
-nx_router_t *nx_router(char *name, nx_router_configuration_t *config);
+nx_router_t *nx_router(nx_router_configuration_t *config);
 void         nx_router_free(nx_router_t *router);
 
 #endif

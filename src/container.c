@@ -29,20 +29,27 @@
 #include <nexus/iterator.h>
 #include <nexus/link_allocator.h>
 
-struct container_node_t {
-    node_descriptor_t desc;
+struct nx_node_t {
+    const nx_node_type_t *ntype;
+    char                 *name;
+    void                 *context;
+    nx_dist_mode_t        supported_dist;
+    nx_lifetime_policy_t  life_policy;
 };
 
-static hash_t           *node_map;
-static sys_mutex_t      *lock;
-static container_node_t *default_node;
+ALLOC_DEFINE(nx_node_t);
 
-static void container_setup_outgoing_link(pn_link_t *link)
+static hash_t      *node_type_map;
+static hash_t      *node_map;
+static sys_mutex_t *lock;
+static nx_node_t   *default_node;
+
+static void setup_outgoing_link(pn_link_t *link)
 {
     sys_mutex_lock(lock);
-    container_node_t    *node;
-    int                  result;
-    const char          *source = pn_terminus_get_address(pn_link_remote_source(link));
+    nx_node_t   *node;
+    int         result;
+    const char *source = pn_terminus_get_address(pn_link_remote_source(link));
     nx_field_iterator_t *iter;
     // TODO - Extract the name from the structured source
 
@@ -69,16 +76,16 @@ static void container_setup_outgoing_link(pn_link_t *link)
     item->container_context = node;
 
     pn_link_set_context(link, item);
-    node->desc.outgoing_handler(node->desc.context, link);
+    node->ntype->outgoing_handler(node->context, link);
 }
 
 
-static void container_setup_incoming_link(pn_link_t *link)
+static void setup_incoming_link(pn_link_t *link)
 {
     sys_mutex_lock(lock);
-    container_node_t    *node;
-    int                  result;
-    const char          *target = pn_terminus_get_address(pn_link_remote_target(link));
+    nx_node_t   *node;
+    int          result;
+    const char  *target = pn_terminus_get_address(pn_link_remote_target(link));
     nx_field_iterator_t *iter;
     // TODO - Extract the name from the structured target
 
@@ -105,33 +112,33 @@ static void container_setup_incoming_link(pn_link_t *link)
     item->container_context = node;
 
     pn_link_set_context(link, item);
-    node->desc.incoming_handler(node->desc.context, link);
+    node->ntype->incoming_handler(node->context, link);
 }
 
 
-static int container_do_writable(pn_link_t *link)
+static int do_writable(pn_link_t *link)
 {
     nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
     if (!item)
         return 0;
 
-    container_node_t *node = (container_node_t*) item->container_context;
+    nx_node_t *node = (nx_node_t*) item->container_context;
     if (!node)
         return 0;
 
-    return node->desc.writable_handler(node->desc.context, link);
+    return node->ntype->writable_handler(node->context, link);
 }
 
 
-static void container_process_receive(pn_delivery_t *delivery)
+static void process_receive(pn_delivery_t *delivery)
 {
     pn_link_t      *link = pn_delivery_link(delivery);
     nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
 
     if (item) {
-        container_node_t *node = (container_node_t*) item->container_context;
+        nx_node_t *node = (nx_node_t*) item->container_context;
         if (node) {
-            node->desc.rx_handler(node->desc.context, delivery, item->node_context);
+            node->ntype->rx_handler(node->context, delivery, item->node_context);
             return;
         }
     }
@@ -146,15 +153,15 @@ static void container_process_receive(pn_delivery_t *delivery)
 }
 
 
-static void container_do_send(pn_delivery_t *delivery)
+static void do_send(pn_delivery_t *delivery)
 {
     pn_link_t      *link = pn_delivery_link(delivery);
     nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
 
     if (item) {
-        container_node_t *node = (container_node_t*) item->container_context;
+        nx_node_t *node = (nx_node_t*) item->container_context;
         if (node) {
-            node->desc.tx_handler(node->desc.context, delivery, item->node_context);
+            node->ntype->tx_handler(node->context, delivery, item->node_context);
             return;
         }
     }
@@ -163,20 +170,20 @@ static void container_do_send(pn_delivery_t *delivery)
 }
 
 
-static void container_do_updated(pn_delivery_t *delivery)
+static void do_updated(pn_delivery_t *delivery)
 {
     pn_link_t      *link = pn_delivery_link(delivery);
     nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
 
     if (item) {
-        container_node_t *node = (container_node_t*) item->container_context;
+        nx_node_t *node = (nx_node_t*) item->container_context;
         if (node)
-            node->desc.disp_handler(node->desc.context, delivery, item->node_context);
+            node->ntype->disp_handler(node->context, delivery, item->node_context);
     }
 }
 
 
-static int container_close_handler(void* unused, pn_connection_t *conn)
+static int close_handler(void* unused, pn_connection_t *conn)
 {
     //
     // Close all links, passing False as the 'closed' argument.  These links are not
@@ -184,10 +191,10 @@ static int container_close_handler(void* unused, pn_connection_t *conn)
     //
     pn_link_t *link = pn_link_head(conn, 0);
     while (link) {
-        nx_link_item_t   *item = (nx_link_item_t*) pn_link_get_context(link);
-        container_node_t *node = (container_node_t*) item->container_context;
+        nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
+        nx_node_t      *node = (nx_node_t*) item->container_context;
         if (node)
-            node->desc.link_detach_handler(node->desc.context, link, 0);
+            node->ntype->link_detach_handler(node->context, link, 0);
         pn_link_close(link);
         link = pn_link_next(link, 0);
     }
@@ -205,7 +212,7 @@ static int container_close_handler(void* unused, pn_connection_t *conn)
 }
 
 
-static int container_process_handler(void* unused, pn_connection_t *conn)
+static int process_handler(void* unused, pn_connection_t *conn)
 {
     pn_session_t    *ssn;
     pn_link_t       *link;
@@ -233,9 +240,9 @@ static int container_process_handler(void* unused, pn_connection_t *conn)
     link = pn_link_head(conn, PN_LOCAL_UNINIT);
     while (link) {
         if (pn_link_is_sender(link))
-            container_setup_outgoing_link(link);
+            setup_outgoing_link(link);
         else
-            container_setup_incoming_link(link);
+            setup_incoming_link(link);
         link = pn_link_next(link, PN_LOCAL_UNINIT);
         event_count++;
     }
@@ -247,12 +254,12 @@ static int container_process_handler(void* unused, pn_connection_t *conn)
     delivery = pn_work_head(conn);
     while (delivery) {
         if      (pn_delivery_readable(delivery))
-            container_process_receive(delivery);
+            process_receive(delivery);
         else if (pn_delivery_writable(delivery))
-            container_do_send(delivery);
+            do_send(delivery);
 
         if (pn_delivery_updated(delivery)) 
-            container_do_updated(delivery);
+            do_updated(delivery);
 
         delivery = pn_work_next(delivery);
         event_count++;
@@ -267,7 +274,7 @@ static int container_process_handler(void* unused, pn_connection_t *conn)
     while (link) {
         assert(pn_session_connection(pn_link_session(link)) == conn);
         if (pn_link_is_sender(link) && pn_link_credit(link) > 0)
-            event_count += container_do_writable(link);
+            event_count += do_writable(link);
         link = pn_link_next(link, PN_LOCAL_ACTIVE | PN_REMOTE_ACTIVE);
     }
 
@@ -278,10 +285,10 @@ static int container_process_handler(void* unused, pn_connection_t *conn)
     // teardown any terminating links
     link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
     while (link) {
-        nx_link_item_t   *item = (nx_link_item_t*) pn_link_get_context(link);
-        container_node_t *node = (container_node_t*) item->container_context;
+        nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
+        nx_node_t      *node = (nx_node_t*) item->container_context;
         if (node)
-            node->desc.link_detach_handler(node->desc.context, link, 1); // TODO - get 'closed' from detach message
+            node->ntype->link_detach_handler(node->context, link, 1); // TODO - get 'closed' from detach message
         pn_link_close(link);
         link = pn_link_next(link, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
         event_count++;
@@ -305,90 +312,125 @@ static int container_process_handler(void* unused, pn_connection_t *conn)
 }
 
 
-static int container_handler(void* context, nx_conn_event_t event, nx_connection_t *nx_conn)
+static int handler(void* context, nx_conn_event_t event, nx_connection_t *nx_conn)
 {
     pn_connection_t *conn = nx_connection_get_engine(nx_conn);
 
     switch (event) {
     case NX_CONN_EVENT_LISTENER_OPEN:  printf("L_OPEN\n");   break; // TODO - Propagate these up
     case NX_CONN_EVENT_CONNECTOR_OPEN: printf("C_OPEN\n");   break;
-    case NX_CONN_EVENT_CLOSE:          return container_close_handler(context, conn);
-    case NX_CONN_EVENT_PROCESS:        return container_process_handler(context, conn);
+    case NX_CONN_EVENT_CLOSE:          return close_handler(context, conn);
+    case NX_CONN_EVENT_PROCESS:        return process_handler(context, conn);
     }
 
     return 0;
 }
 
 
-void container_init(void)
+void nx_container_initialize(void)
 {
     printf("[Container Initializing]\n");
 
+    // TODO - move allocator init to server?
     const nx_allocator_config_t *alloc_config = nx_allocator_default_config();
     nx_allocator_initialize(alloc_config);
 
-    node_map = hash_initialize(10, 32); // 1K buckets, item batches of 32
-    lock = sys_mutex();
-    default_node = 0;
-    nx_server_set_conn_handler(container_handler);
+    node_type_map = hash_initialize(6,  4);  // 64 buckets, item batches of 4
+    node_map      = hash_initialize(10, 32); // 1K buckets, item batches of 32
+    lock          = sys_mutex();
+    default_node  = 0;
+
+    nx_server_set_conn_handler(handler);
 }
 
 
-container_node_t *container_register_node(node_descriptor_t desc)
+void nx_container_finalize(void)
 {
-    container_node_t *node = NEW(container_node_t);
-    node->desc.name = (char*) malloc(strlen(desc.name) + 1);
-    strcpy(node->desc.name, desc.name);
-    node->desc.context             = desc.context;
-    node->desc.rx_handler          = desc.rx_handler;
-    node->desc.tx_handler          = desc.tx_handler;
-    node->desc.disp_handler        = desc.disp_handler;
-    node->desc.incoming_handler    = desc.incoming_handler;
-    node->desc.outgoing_handler    = desc.outgoing_handler;
-    node->desc.writable_handler    = desc.writable_handler;
-    node->desc.link_detach_handler = desc.link_detach_handler;
+}
 
-    if (strcmp("*", desc.name) == 0) {
-        default_node = node;
-        printf("[Container: Default Node Registered]\n");
-    } else {
-        nx_field_iterator_t *iter = nx_field_iterator_string(desc.name, ITER_VIEW_ALL);
+
+int nx_container_register_node_type(const nx_node_type_t *nt)
+{
+    int result;
+    nx_field_iterator_t *iter = nx_field_iterator_string(nt->type_name, ITER_VIEW_ALL);
+    sys_mutex_lock(lock);
+    result = hash_insert_const(node_type_map, iter, nt);
+    sys_mutex_unlock(lock);
+    nx_field_iterator_free(iter);
+    if (result < 0)
+        return result;
+    printf("[Container: Node Type Registered - %s]\n", nt->type_name);
+
+    return 0;
+}
+
+
+void nx_container_set_default_node_type(const nx_node_type_t *nt,
+                                        void                 *context,
+                                        nx_dist_mode_t        supported_dist)
+{
+    if (default_node)
+        nx_container_destroy_node(default_node);
+
+    if (nt)
+        default_node = nx_container_create_node(nt, 0, context, supported_dist, NX_LIFE_PERMANENT);
+    else
+        default_node = 0;
+}
+
+
+nx_node_t *nx_container_create_node(const nx_node_type_t *nt,
+                                    char                 *name,
+                                    void                 *context,
+                                    nx_dist_mode_t        supported_dist,
+                                    nx_lifetime_policy_t  life_policy)
+{
+    int result;
+    nx_node_t *node = new_nx_node_t();
+    if (!node)
+        return 0;
+
+    node->ntype          = nt;
+    node->name           = 0;
+    node->context        = context;
+    node->supported_dist = supported_dist;
+    node->life_policy    = life_policy;
+
+    if (name) {
+        nx_field_iterator_t *iter = nx_field_iterator_string(name, ITER_VIEW_ALL);
         sys_mutex_lock(lock);
-        if (hash_insert(node_map, iter, node) < 0) {
-            free(node->desc.name);
-            free(node);
-            node = 0;
-        }
+        result = hash_insert(node_map, iter, node);
         sys_mutex_unlock(lock);
         nx_field_iterator_free(iter);
-        printf("[Container: Node Registered - %s]\n", desc.name);
+        if (result < 0) {
+            free_nx_node_t(node);
+            return 0;
+        }
+
+        node->name = (char*) malloc(strlen(name) + 1);
+        strcpy(node->name, name);
     }
 
     return node;
 }
 
 
-int container_unregister_node(container_node_t *node)
+void nx_container_destroy_node(nx_node_t *node)
 {
-    int result = 0;
-
-    if (strcmp("*", node->desc.name) == 0)
-        default_node = 0;
-    else {
-        nx_field_iterator_t *iter = nx_field_iterator_string(node->desc.name, ITER_VIEW_ALL);
+    if (node->name) {
+        nx_field_iterator_t *iter = nx_field_iterator_string(node->name, ITER_VIEW_ALL);
         sys_mutex_lock(lock);
-        result = hash_remove(node_map, iter);
+        hash_remove(node_map, iter);
         sys_mutex_unlock(lock);
         nx_field_iterator_free(iter);
+        free(node->name);
     }
 
-    free(node->desc.name);
-    free(node);
-    return result;
+    free_nx_node_t(node);
 }
 
 
-void container_set_link_context(pn_link_t *link, void *link_context)
+void nx_container_set_link_context(pn_link_t *link, void *link_context)
 {
     nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
     if (item)
@@ -396,7 +438,7 @@ void container_set_link_context(pn_link_t *link, void *link_context)
 }
 
 
-void *container_get_link_context(pn_link_t *link)
+void *nx_container_get_link_context(pn_link_t *link)
 {
     nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
     if (item)
@@ -405,7 +447,7 @@ void *container_get_link_context(pn_link_t *link)
 }
 
 
-void container_activate_link(pn_link_t *link)
+void nx_container_activate_link(pn_link_t *link)
 {
     if (!link)
         return;

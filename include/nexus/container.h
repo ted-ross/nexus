@@ -21,29 +21,61 @@
 
 #include <proton/engine.h>
 #include <nexus/server.h>
+#include <nexus/alloc.h>
 
-typedef struct container_node_t container_node_t;
-typedef void (*container_delivery_handler_t)    (void* context, pn_delivery_t *delivery, void *link_context);
-typedef int  (*container_link_handler_t)        (void* context, pn_link_t *link);
-typedef int  (*container_link_detach_handler_t) (void* context, pn_link_t *link, int closed);
+typedef uint8_t nx_dist_mode_t;
+#define NX_DIST_COPY 0x01
+#define NX_DIST_MOVE 0x02
+#define NX_DIST_BOTH 0x03
+
+typedef enum {
+    NX_LIFE_PERMANENT,
+    NX_LIFE_DELETE_CLOSE,
+    NX_LIFE_DELETE_NO_LINKS,
+    NX_LIFE_DELETE_NO_MESSAGES,
+    NX_LIFE_DELETE_NO_LINKS_MESSAGES
+} nx_lifetime_policy_t;
+
+
+typedef struct nx_node_t nx_node_t;
+
+ALLOC_DECLARE(nx_node_t);
+
+typedef void (*nx_container_delivery_handler_t)    (void* context, pn_delivery_t *delivery, void *link_context);
+typedef int  (*nx_container_link_handler_t)        (void* context, pn_link_t *link);
+typedef int  (*nx_container_link_detach_handler_t) (void* context, pn_link_t *link, int closed);
 
 typedef struct {
-    char                            *name;
-    void                            *context;
-    container_delivery_handler_t     rx_handler;
-    container_delivery_handler_t     tx_handler;
-    container_delivery_handler_t     disp_handler;
-    container_link_handler_t         incoming_handler;
-    container_link_handler_t         outgoing_handler;
-    container_link_handler_t         writable_handler;
-    container_link_detach_handler_t  link_detach_handler;
-} node_descriptor_t;
+    char                               *type_name;
+    void                               *type_context;
+    int                                 allow_dynamic_creation;
+    nx_container_delivery_handler_t     rx_handler;
+    nx_container_delivery_handler_t     tx_handler;
+    nx_container_delivery_handler_t     disp_handler;
+    nx_container_link_handler_t         incoming_handler;
+    nx_container_link_handler_t         outgoing_handler;
+    nx_container_link_handler_t         writable_handler;
+    nx_container_link_detach_handler_t  link_detach_handler;
+} nx_node_type_t;
 
-void container_init(void);
-container_node_t *container_register_node(node_descriptor_t desc);
-int container_unregister_node(container_node_t *node);
-void container_set_link_context(pn_link_t *link, void *link_context);
-void *container_get_link_context(pn_link_t *link);
-void container_activate_link(pn_link_t *link);
+void nx_container_initialize(void);
+void nx_container_finalize(void);
+
+int nx_container_register_node_type(const nx_node_type_t *nt);
+
+void nx_container_set_default_node_type(const nx_node_type_t *nt,
+                                        void                 *context,
+                                        nx_dist_mode_t        supported_dist);
+
+nx_node_t *nx_container_create_node(const nx_node_type_t *nt,
+                                    char                 *name,
+                                    void                 *context,
+                                    nx_dist_mode_t        supported_dist,
+                                    nx_lifetime_policy_t  life_policy);
+void nx_container_destroy_node(nx_node_t *node);
+
+void nx_container_set_link_context(pn_link_t *link, void *link_context);
+void *nx_container_get_link_context(pn_link_t *link);
+void nx_container_activate_link(pn_link_t *link);
 
 #endif

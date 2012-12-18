@@ -28,9 +28,26 @@
 #include <nexus/hash.h>
 #include <nexus/iterator.h>
 
+static void router_rx_handler(void* context, pn_delivery_t *delivery, void *link_context);
+static void router_tx_handler(void* context, pn_delivery_t *delivery, void *link_context);
+static void router_disp_handler(void* context, pn_delivery_t *delivery, void *link_context);
+static int  router_incoming_link_handler(void* context, pn_link_t *link);
+static int  router_outgoing_link_handler(void* context, pn_link_t *link);
+static int  router_writable_link_handler(void* context, pn_link_t *link);
+static int  router_link_detach_handler(void* context, pn_link_t *link, int closed);
+
+static nx_node_type_t router_node = {"router", 0, 0,
+                                     router_rx_handler,
+                                     router_tx_handler,
+                                     router_disp_handler,
+                                     router_incoming_link_handler,
+                                     router_outgoing_link_handler,
+                                     router_writable_link_handler,
+                                     router_link_detach_handler };
+static int type_registered = 0;
+
 struct nx_router_t {
-    node_descriptor_t  desc;
-    container_node_t  *node;
+    nx_node_t         *node;
     nx_link_list_t     in_links;
     nx_link_list_t     out_links;
     nx_message_list_t  in_fifo;
@@ -128,7 +145,7 @@ static void router_rx_handler(void* context, pn_delivery_t *delivery, void *link
             if (result == 0) {
                 DEQ_INSERT_TAIL(rlink->out_fifo, msg);
                 pn_link_offered(rlink->link, DEQ_SIZE(rlink->out_fifo));
-                container_activate_link(rlink->link);
+                nx_container_activate_link(rlink->link);
             } else {
                 pn_delivery_update(delivery, PN_RELEASED);
                 pn_delivery_settle(delivery);
@@ -168,7 +185,7 @@ static void router_disp_handler(void* context, pn_delivery_t *delivery, void *li
             }
 
             if (activate)
-                container_activate_link(pn_delivery_link(activate));
+                nx_container_activate_link(pn_delivery_link(activate));
 
             return;
         }
@@ -207,7 +224,7 @@ static int router_outgoing_link_handler(void* context, pn_link_t *link)
     nx_router_link_t *rlink = NEW(nx_router_link_t);
     rlink->link = link;
     DEQ_INIT(rlink->out_fifo);
-    container_set_link_context(link, rlink);
+    nx_container_set_link_context(link, rlink);
 
     nx_field_iterator_t *iter = nx_field_iterator_string(r_tgt, ITER_VIEW_NO_HOST);
     int result = hash_insert(router->out_hash, iter, rlink);
@@ -233,7 +250,7 @@ static int router_writable_link_handler(void* context, pn_link_t *link)
     nx_router_t      *router = (nx_router_t*) context;
     int               grant_delivery = 0;
     pn_delivery_t    *delivery;
-    nx_router_link_t *rlink = (nx_router_link_t*) container_get_link_context(link);
+    nx_router_link_t *rlink = (nx_router_link_t*) nx_container_get_link_context(link);
     uint64_t          tag;
 
     sys_mutex_lock(router->lock);
@@ -247,7 +264,7 @@ static int router_writable_link_handler(void* context, pn_link_t *link)
         pn_delivery(link, pn_dtag((char*) &tag, 8));
         delivery = pn_link_current(link);
         if (delivery) {
-            void *link_context = container_get_link_context(link);
+            void *link_context = nx_container_get_link_context(link);
             router_tx_handler(context, delivery, link_context);
             return 1;
         }
@@ -303,25 +320,15 @@ static void nx_router_timer_handler(void *context)
 }
 
 
-nx_router_t *nx_router(char *name, nx_router_configuration_t *config)
+nx_router_t *nx_router(nx_router_configuration_t *config)
 {
-    nx_router_t *router = NEW(nx_router_t);
-
-    router->desc.name                = name;
-    router->desc.context             = (void*) router;
-    router->desc.rx_handler          = router_rx_handler;
-    router->desc.tx_handler          = router_tx_handler;
-    router->desc.disp_handler        = router_disp_handler;
-    router->desc.incoming_handler    = router_incoming_link_handler;
-    router->desc.outgoing_handler    = router_outgoing_link_handler;
-    router->desc.writable_handler    = router_writable_link_handler;
-    router->desc.link_detach_handler = router_link_detach_handler;
-
-    router->node = container_register_node(router->desc);
-    if (!router->node) {
-        free(router);
-        return 0;
+    if (!type_registered) {
+        type_registered = 1;
+        nx_container_register_node_type(&router_node);
     }
+
+    nx_router_t *router = NEW(nx_router_t);
+    nx_container_set_default_node_type(&router_node, (void*) router, NX_DIST_BOTH);
 
     DEQ_INIT(router->in_links);
     DEQ_INIT(router->out_links);
@@ -341,6 +348,7 @@ nx_router_t *nx_router(char *name, nx_router_configuration_t *config)
 
 void nx_router_free(nx_router_t *router)
 {
+    nx_container_set_default_node_type(0, 0, NX_DIST_BOTH);
     sys_mutex_free(router->lock);
     free(router);
 }
