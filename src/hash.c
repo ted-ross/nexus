@@ -25,7 +25,10 @@
 typedef struct item_t {
     DEQ_LINKS(struct item_t);
     unsigned char *key;
-    void          *val;
+    union {
+        void       *val;
+        const void *val_const;
+    } v;
 } item_t;
 
 
@@ -107,42 +110,12 @@ size_t hash_size(hash_t *h)
 }
 
 
-int hash_insert(hash_t *h, nx_field_iterator_t *key, void *val)
+static item_t *hash_internal_insert(hash_t *h, nx_field_iterator_t *key, int *error)
 {
     unsigned long  idx  = hash_function(key) & h->bucket_mask;
     item_t        *item = DEQ_HEAD(h->buckets[idx].items);
 
-    while (item) {
-        if (nx_field_iterator_equal(key, item->key))
-            break;
-        item = item->next;
-    }
-
-    if (item)
-        return -1;
-
-    if (DEQ_SIZE(h->item_free_list) == 0)
-        hash_allocate_item_batch(h);
-
-    if (DEQ_SIZE(h->item_free_list) == 0)
-        return -2;
-
-    item = DEQ_HEAD(h->item_free_list);
-    DEQ_REMOVE_HEAD(h->item_free_list);
-
-    item->key = nx_field_iterator_copy(key);
-    item->val = val;
-
-    DEQ_INSERT_TAIL(h->buckets[idx].items, item);
-    h->size++;
-    return 0;
-}
-
-
-int hash_retrieve(hash_t *h, nx_field_iterator_t *key, void **val)
-{
-    unsigned long  idx  = hash_function(key) & h->bucket_mask;
-    item_t        *item = DEQ_HEAD(h->buckets[idx].items);
+    *error = 0;
 
     while (item) {
         if (nx_field_iterator_equal(key, item->key))
@@ -151,10 +124,84 @@ int hash_retrieve(hash_t *h, nx_field_iterator_t *key, void **val)
     }
 
     if (item) {
-        *val = item->val;
+        *error = -1;
         return 0;
     }
 
+    if (DEQ_SIZE(h->item_free_list) == 0)
+        hash_allocate_item_batch(h);
+
+    if (DEQ_SIZE(h->item_free_list) == 0) {
+        *error = -2;
+        return 0;
+    }
+
+    item = DEQ_HEAD(h->item_free_list);
+    DEQ_REMOVE_HEAD(h->item_free_list);
+
+    item->key = nx_field_iterator_copy(key);
+
+    DEQ_INSERT_TAIL(h->buckets[idx].items, item);
+    h->size++;
+    return item;
+}
+
+
+int hash_insert(hash_t *h, nx_field_iterator_t *key, void *val)
+{
+    int     error = 0;
+    item_t *item  = hash_internal_insert(h, key, &error);
+
+    if (item)
+        item->v.val = val;
+    return error;
+}
+
+
+int hash_insert_const(hash_t *h, nx_field_iterator_t *key, const void *val)
+{
+    int     error = 0;
+    item_t *item  = hash_internal_insert(h, key, &error);
+
+    if (item)
+        item->v.val_const = val;
+    return error;
+}
+
+
+static item_t *hash_internal_retrieve(hash_t *h, nx_field_iterator_t *key)
+{
+    unsigned long  idx  = hash_function(key) & h->bucket_mask;
+    item_t        *item = DEQ_HEAD(h->buckets[idx].items);
+
+    while (item) {
+        if (nx_field_iterator_equal(key, item->key))
+            break;
+        item = item->next;
+    }
+
+    return item;
+}
+
+
+int hash_retrieve(hash_t *h, nx_field_iterator_t *key, void **val)
+{
+    item_t *item = hash_internal_retrieve(h, key);
+    if (item) {
+        *val = item->v.val;
+        return 0;
+    }
+    return -1;
+}
+
+
+int hash_retrieve_const(hash_t *h, nx_field_iterator_t *key, const void **val)
+{
+    item_t *item = hash_internal_retrieve(h, key);
+    if (item) {
+        *val = item->v.val_const;
+        return 0;
+    }
     return -1;
 }
 
