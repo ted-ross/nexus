@@ -48,19 +48,19 @@ typedef enum {
 
 
 struct nx_listener_t {
-    nx_server_config_t *config;
-    void               *context;
-    pn_listener_t      *pn_listener;
+    const nx_server_config_t *config;
+    void                     *context;
+    pn_listener_t            *pn_listener;
 };
 
 
 struct nx_connector_t {
-    cxtr_state_t        state;
-    nx_server_config_t *config;
-    void               *context;
-    nx_connection_t    *ctx;
-    nx_timer_t         *timer;
-    long                delay;
+    cxtr_state_t              state;
+    const nx_server_config_t *config;
+    void                     *context;
+    nx_connection_t          *ctx;
+    nx_timer_t               *timer;
+    long                      delay;
 };
 
 

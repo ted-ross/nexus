@@ -334,7 +334,7 @@ typedef struct nx_server_config_t {
  * @param context User context passed back in the connection handler.
  * @return A pointer to the new listener, or NULL in case of failure.
  */
-nx_listener_t *nx_server_listen(nx_server_config_t *config, void *context);
+nx_listener_t *nx_server_listen(const nx_server_config_t *config, void *context);
 
 /**
  * Free the resources associated with a listener.
@@ -359,7 +359,7 @@ void nx_listener_close(nx_listener_t* li);
  * @param context User context passed back in the connection handler.
  * @return A pointer to the new connector, or NULL in case of failure.
  */
-nx_connector_t *nx_server_connect(nx_server_config_t *config, void *context);
+nx_connector_t *nx_server_connect(const nx_server_config_t *config, void *context);
 
 /**
  * Free the resources associated with a connector.

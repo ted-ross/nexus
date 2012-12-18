@@ -747,7 +747,7 @@ pn_connection_t *nx_connection_get_engine(nx_connection_t *conn)
 }
 
 
-nx_listener_t *nx_server_listen(nx_server_config_t *config, void *context)
+nx_listener_t *nx_server_listen(const nx_server_config_t *config, void *context)
 {
     nx_listener_t *li = new_nx_listener_t();
 
@@ -783,7 +783,7 @@ void nx_server_listener_close(nx_listener_t* li)
 }
 
 
-nx_connector_t *nx_server_connect(nx_server_config_t *config, void *context)
+nx_connector_t *nx_server_connect(const nx_server_config_t *config, void *context)
 {
     nx_connector_t *ct = new_nx_connector_t();
 
