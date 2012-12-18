@@ -19,20 +19,23 @@
 
 #include <nexus/hash.h>
 #include <nexus/ctools.h>
+#include <nexus/alloc.h>
 #include <stdio.h>
 #include <string.h>
 
-typedef struct item_t {
-    DEQ_LINKS(struct item_t);
+typedef struct hash_item_t {
+    DEQ_LINKS(struct hash_item_t);
     unsigned char *key;
     union {
         void       *val;
         const void *val_const;
     } v;
-} item_t;
+} hash_item_t;
 
+ALLOC_DECLARE(hash_item_t);
+ALLOC_DEFINE(hash_item_t);
 
-typedef DEQ(item_t) items_t;
+typedef DEQ(hash_item_t) items_t;
 
 
 typedef struct bucket_t {
@@ -41,7 +44,6 @@ typedef struct bucket_t {
 
 
 struct hash_t {
-    items_t       item_free_list;
     bucket_t     *buckets;
     unsigned int  bucket_count;
     unsigned int  bucket_mask;
@@ -66,17 +68,6 @@ static unsigned long hash_function(nx_field_iterator_t *iter)
 }
 
 
-static void hash_allocate_item_batch(hash_t *h)
-{
-    item_t *batch = NEW_ARRAY(item_t, h->batch_size);
-    int     i;
-
-    memset(batch, 0, sizeof(item_t) * h->batch_size);
-    for (i = 0; i < h->batch_size; i++)
-        DEQ_INSERT_TAIL(h->item_free_list, &batch[i]);
-}
-
-
 hash_t *hash(int bucket_exponent, int batch_size, int value_is_const)
 {
     int i;
@@ -85,7 +76,6 @@ hash_t *hash(int bucket_exponent, int batch_size, int value_is_const)
     if (!h)
         return 0;
 
-    DEQ_INIT(h->item_free_list);
     h->bucket_count = 1 << bucket_exponent;
     h->bucket_mask  = h->bucket_count - 1;
     h->batch_size   = batch_size;
@@ -112,10 +102,10 @@ size_t hash_size(hash_t *h)
 }
 
 
-static item_t *hash_internal_insert(hash_t *h, nx_field_iterator_t *key, int *error)
+static hash_item_t *hash_internal_insert(hash_t *h, nx_field_iterator_t *key, int *error)
 {
     unsigned long  idx  = hash_function(key) & h->bucket_mask;
-    item_t        *item = DEQ_HEAD(h->buckets[idx].items);
+    hash_item_t   *item = DEQ_HEAD(h->buckets[idx].items);
 
     *error = 0;
 
@@ -130,17 +120,13 @@ static item_t *hash_internal_insert(hash_t *h, nx_field_iterator_t *key, int *er
         return 0;
     }
 
-    if (DEQ_SIZE(h->item_free_list) == 0)
-        hash_allocate_item_batch(h);
-
-    if (DEQ_SIZE(h->item_free_list) == 0) {
+    item = new_hash_item_t();
+    if (!item) {
         *error = -2;
         return 0;
     }
 
-    item = DEQ_HEAD(h->item_free_list);
-    DEQ_REMOVE_HEAD(h->item_free_list);
-
+    DEQ_ITEM_INIT(item);
     item->key = nx_field_iterator_copy(key);
 
     DEQ_INSERT_TAIL(h->buckets[idx].items, item);
@@ -151,8 +137,8 @@ static item_t *hash_internal_insert(hash_t *h, nx_field_iterator_t *key, int *er
 
 int hash_insert(hash_t *h, nx_field_iterator_t *key, void *val)
 {
-    int     error = 0;
-    item_t *item  = hash_internal_insert(h, key, &error);
+    int          error = 0;
+    hash_item_t *item  = hash_internal_insert(h, key, &error);
 
     if (item)
         item->v.val = val;
@@ -165,8 +151,8 @@ int hash_insert_const(hash_t *h, nx_field_iterator_t *key, const void *val)
     if (!h->is_const)
         return -3;
 
-    int     error = 0;
-    item_t *item  = hash_internal_insert(h, key, &error);
+    int          error = 0;
+    hash_item_t *item  = hash_internal_insert(h, key, &error);
 
     if (item)
         item->v.val_const = val;
@@ -174,10 +160,10 @@ int hash_insert_const(hash_t *h, nx_field_iterator_t *key, const void *val)
 }
 
 
-static item_t *hash_internal_retrieve(hash_t *h, nx_field_iterator_t *key)
+static hash_item_t *hash_internal_retrieve(hash_t *h, nx_field_iterator_t *key)
 {
     unsigned long  idx  = hash_function(key) & h->bucket_mask;
-    item_t        *item = DEQ_HEAD(h->buckets[idx].items);
+    hash_item_t   *item = DEQ_HEAD(h->buckets[idx].items);
 
     while (item) {
         if (nx_field_iterator_equal(key, item->key))
@@ -191,7 +177,7 @@ static item_t *hash_internal_retrieve(hash_t *h, nx_field_iterator_t *key)
 
 int hash_retrieve(hash_t *h, nx_field_iterator_t *key, void **val)
 {
-    item_t *item = hash_internal_retrieve(h, key);
+    hash_item_t *item = hash_internal_retrieve(h, key);
     if (item) {
         *val = item->v.val;
         return 0;
@@ -205,7 +191,7 @@ int hash_retrieve_const(hash_t *h, nx_field_iterator_t *key, const void **val)
     if (!h->is_const)
         return -3;
 
-    item_t *item = hash_internal_retrieve(h, key);
+    hash_item_t *item = hash_internal_retrieve(h, key);
     if (item) {
         *val = item->v.val_const;
         return 0;
@@ -217,7 +203,7 @@ int hash_retrieve_const(hash_t *h, nx_field_iterator_t *key, const void **val)
 int hash_remove(hash_t *h, nx_field_iterator_t *key)
 {
     unsigned long  idx  = hash_function(key) & h->bucket_mask;
-    item_t        *item = DEQ_HEAD(h->buckets[idx].items);
+    hash_item_t   *item = DEQ_HEAD(h->buckets[idx].items);
 
     while (item) {
         if (nx_field_iterator_equal(key, item->key))
@@ -228,7 +214,7 @@ int hash_remove(hash_t *h, nx_field_iterator_t *key)
     if (item) {
         free(item->key);
         DEQ_REMOVE(h->buckets[idx].items, item);
-        DEQ_INSERT_TAIL(h->item_free_list, item);
+        free_hash_item_t(item);
         h->size--;
         return 0;
     }
