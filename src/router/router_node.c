@@ -43,7 +43,9 @@ static nx_node_type_t router_node = {"router", 0, 0,
                                      router_incoming_link_handler,
                                      router_outgoing_link_handler,
                                      router_writable_link_handler,
-                                     router_link_detach_handler };
+                                     router_link_detach_handler,
+                                     0,   // node_created_handler
+                                     0};  // node_destroyed_handler
 static int type_registered = 0;
 
 struct nx_router_t {

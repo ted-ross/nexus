@@ -37,6 +37,7 @@ struct nx_node_t {
     nx_lifetime_policy_t  life_policy;
 };
 
+ALLOC_DECLARE(nx_node_t);
 ALLOC_DEFINE(nx_node_t);
 
 static hash_t      *node_type_map;
@@ -380,7 +381,7 @@ void nx_container_set_default_node_type(const nx_node_type_t *nt,
 
 
 nx_node_t *nx_container_create_node(const nx_node_type_t *nt,
-                                    char                 *name,
+                                    const char           *name,
                                     void                 *context,
                                     nx_dist_mode_t        supported_dist,
                                     nx_lifetime_policy_t  life_policy)
@@ -427,6 +428,24 @@ void nx_container_destroy_node(nx_node_t *node)
     }
 
     free_nx_node_t(node);
+}
+
+
+void nx_container_node_set_context(nx_node_t *node, void *node_context)
+{
+    node->context = node_context;
+}
+
+
+nx_dist_mode_t nx_container_node_get_dist_modes(const nx_node_t *node)
+{
+    return node->supported_dist;
+}
+
+
+nx_lifetime_policy_t nx_container_node_get_life_policy(const nx_node_t *node)
+{
+    return node->life_policy;
 }
 
 

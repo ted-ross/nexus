@@ -27,13 +27,15 @@
 #include <nexus/link_allocator.h>
 #include <nexus/container.h>
 
-static void bq_rx_handler(void* context, pn_delivery_t *delivery, void *link_context);
-static void bq_tx_handler(void* context, pn_delivery_t *delivery, void *link_context);
-static void bq_disp_handler(void* context, pn_delivery_t *delivery, void *link_context);
-static int  bq_incoming_link_handler(void* context, pn_link_t *link);
-static int  bq_outgoing_link_handler(void* context, pn_link_t *link);
-static int  bq_writable_link_handler(void* context, pn_link_t *link);
-static int  bq_link_detach_handler(void* context, pn_link_t *link, int closed);
+static void bq_rx_handler(void *context, pn_delivery_t *delivery, void *link_context);
+static void bq_tx_handler(void *context, pn_delivery_t *delivery, void *link_context);
+static void bq_disp_handler(void *context, pn_delivery_t *delivery, void *link_context);
+static int  bq_incoming_link_handler(void *context, pn_link_t *link);
+static int  bq_outgoing_link_handler(void *context, pn_link_t *link);
+static int  bq_writable_link_handler(void *context, pn_link_t *link);
+static int  bq_link_detach_handler(void *context, pn_link_t *link, int closed);
+static void bq_node_created_handler(void *type_context, nx_node_t *node);
+static void bq_node_destroyed_handler(void *type_context, nx_node_t *node);
 
 static nx_node_type_t bq_node = {"basic_queue", 0, 1,
                                  bq_rx_handler,
@@ -42,7 +44,9 @@ static nx_node_type_t bq_node = {"basic_queue", 0, 1,
                                  bq_incoming_link_handler,
                                  bq_outgoing_link_handler,
                                  bq_writable_link_handler,
-                                 bq_link_detach_handler };
+                                 bq_link_detach_handler,
+                                 bq_node_created_handler,
+                                 bq_node_destroyed_handler };
 static int type_registered = 0;
 
 struct basic_queue_t {
@@ -268,6 +272,16 @@ static int bq_link_detach_handler(void* context, pn_link_t *link, int closed)
 
     sys_mutex_unlock(bq->lock);
     return 0;
+}
+
+
+static void bq_node_created_handler(void *type_context, nx_node_t *node)
+{
+}
+
+
+static void bq_node_destroyed_handler(void *type_context, nx_node_t *node)
+{
 }
 
 
