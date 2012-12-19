@@ -49,10 +49,18 @@ struct nx_link_t {
 ALLOC_DECLARE(nx_link_t);
 ALLOC_DEFINE(nx_link_t);
 
-static hash_t      *node_type_map;
-static hash_t      *node_map;
-static sys_mutex_t *lock;
-static nx_node_t   *default_node;
+typedef struct nxc_node_type_t {
+    DEQ_LINKS(struct nxc_node_type_t);
+    const nx_node_type_t *ntype;
+} nxc_node_type_t;
+DEQ_DECLARE(nxc_node_type_t, nxc_node_type_list_t);
+
+
+static hash_t               *node_type_map;
+static hash_t               *node_map;
+static sys_mutex_t          *lock;
+static nx_node_t            *default_node;
+static nxc_node_type_list_t  node_type_list;
 
 static void setup_outgoing_link(pn_link_t *pn_link)
 {
@@ -337,13 +345,43 @@ static int process_handler(void* unused, pn_connection_t *conn)
 }
 
 
+static void open_handler(nx_connection_t *conn, nx_direction_t dir)
+{
+    const nx_node_type_t *nt;
+
+    //
+    // Note the locking structure in this function.  Generally this would be unsafe, but since
+    // this particular list is only ever appended to and never has items inserted or deleted,
+    // this usage is safe in this case.
+    //
+    sys_mutex_lock(lock);
+    nxc_node_type_t *nt_item = DEQ_HEAD(node_type_list);
+    sys_mutex_unlock(lock);
+
+    while (nt_item) {
+        nt = nt_item->ntype;
+        if (dir == NX_INCOMING) {
+            if (nt->inbound_conn_open_handler)
+                nt->inbound_conn_open_handler(nt->type_context, conn);
+        } else {
+            if (nt->outbound_conn_open_handler)
+                nt->outbound_conn_open_handler(nt->type_context, conn);
+        }
+
+        sys_mutex_lock(lock);
+        nt_item = DEQ_NEXT(nt_item);
+        sys_mutex_unlock(lock);
+    }
+}
+
+
 static int handler(void* context, nx_conn_event_t event, nx_connection_t *nx_conn)
 {
     pn_connection_t *conn = nx_connection_get_engine(nx_conn);
 
     switch (event) {
-    case NX_CONN_EVENT_LISTENER_OPEN:  printf("L_OPEN\n");   break; // TODO - Propagate these up
-    case NX_CONN_EVENT_CONNECTOR_OPEN: printf("C_OPEN\n");   break;
+    case NX_CONN_EVENT_LISTENER_OPEN:  open_handler(nx_conn, NX_INCOMING);   break;
+    case NX_CONN_EVENT_CONNECTOR_OPEN: open_handler(nx_conn, NX_OUTGOING);   break;
     case NX_CONN_EVENT_CLOSE:          return close_handler(context, conn);
     case NX_CONN_EVENT_PROCESS:        return process_handler(context, conn);
     }
@@ -364,6 +402,7 @@ void nx_container_initialize(void)
     node_map      = hash(10, 32, 0); // 1K buckets, item batches of 32
     lock          = sys_mutex();
     default_node  = 0;
+    DEQ_INIT(node_type_list);
 
     nx_server_set_conn_handler(handler);
 }
@@ -378,9 +417,15 @@ int nx_container_register_node_type(const nx_node_type_t *nt)
 {
     int result;
     nx_field_iterator_t *iter = nx_field_iterator_string(nt->type_name, ITER_VIEW_ALL);
+    nxc_node_type_t     *nt_item = NEW(nxc_node_type_t);
+    DEQ_ITEM_INIT(nt_item);
+    nt_item->ntype = nt;
+
     sys_mutex_lock(lock);
     result = hash_insert_const(node_type_map, iter, nt);
+    DEQ_INSERT_TAIL(node_type_list, nt_item);
     sys_mutex_unlock(lock);
+
     nx_field_iterator_free(iter);
     if (result < 0)
         return result;
@@ -473,6 +518,12 @@ nx_lifetime_policy_t nx_container_node_get_life_policy(const nx_node_t *node)
 }
 
 
+nx_link_t *nx_container_create_link(nx_node_t *node, nx_connection_t *conn, nx_direction_t dir, pn_terminus_t *term)
+{
+    return 0;  // TODO
+}
+
+
 void nx_link_set_context(nx_link_t *link, void *context)
 {
     link->context = context;
@@ -510,4 +561,11 @@ void nx_link_activate(nx_link_t *link)
 
     nx_server_activate(ctx);
 }
+
+
+void nx_link_close(nx_link_t *link)
+{
+    pn_link_close(link->pn_link);
+}
+
 

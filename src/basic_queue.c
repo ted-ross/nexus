@@ -279,7 +279,9 @@ static nx_node_type_t bq_node = {"basic_queue", 0, 1,
                                  bq_writable_link_handler,
                                  bq_link_detach_handler,
                                  bq_node_created_handler,
-                                 bq_node_destroyed_handler };
+                                 bq_node_destroyed_handler,
+                                 0,    // inbound_conn_open_handler
+                                 0 };  // outbound_conn_open_handler
 static int type_registered = 0;
 
 

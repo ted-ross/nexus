@@ -308,6 +308,18 @@ static int router_link_detach_handler(void* context, nx_link_t *link, int closed
 }
 
 
+static void router_inbound_open_handler(void *type_context, nx_connection_t *conn)
+{
+    printf("router_inbound_open_handler\n");
+}
+
+
+static void router_outbound_open_handler(void *type_context, nx_connection_t *conn)
+{
+    printf("router_outbound_open_handler\n");
+}
+
+
 static void nx_router_timer_handler(void *context)
 {
     nx_router_t *router = (nx_router_t*) context;
@@ -328,7 +340,9 @@ static nx_node_type_t router_node = {"router", 0, 0,
                                      router_writable_link_handler,
                                      router_link_detach_handler,
                                      0,   // node_created_handler
-                                     0};  // node_destroyed_handler
+                                     0,   // node_destroyed_handler
+                                     router_inbound_open_handler,
+                                     router_outbound_open_handler };
 static int type_registered = 0;
 
 

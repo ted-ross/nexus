@@ -37,20 +37,29 @@ typedef enum {
     NX_LIFE_DELETE_NO_LINKS_MESSAGES
 } nx_lifetime_policy_t;
 
+typedef enum {
+    NX_INCOMING,
+    NX_OUTGOING
+} nx_direction_t;
+
 
 typedef struct nx_node_t nx_node_t;
 typedef struct nx_link_t nx_link_t;
-typedef struct nx_link_item_t nx_link_item_t;
 
-typedef void (*nx_container_node_handler_t)        (void *type_context, nx_node_t *node);
 typedef void (*nx_container_delivery_handler_t)    (void *node_context, nx_link_t *link, pn_delivery_t *delivery);
 typedef int  (*nx_container_link_handler_t)        (void *node_context, nx_link_t *link);
 typedef int  (*nx_container_link_detach_handler_t) (void *node_context, nx_link_t *link, int closed);
+typedef void (*nx_container_node_handler_t)        (void *type_context, nx_node_t *node);
+typedef void (*nx_container_conn_handler_t)        (void *type_context, nx_connection_t *conn);
 
 typedef struct {
-    char                               *type_name;
-    void                               *type_context;
-    int                                 allow_dynamic_creation;
+    char *type_name;
+    void *type_context;
+    int   allow_dynamic_creation;
+
+    //
+    // Node-Instance Handlers
+    //
     nx_container_delivery_handler_t     rx_handler;
     nx_container_delivery_handler_t     tx_handler;
     nx_container_delivery_handler_t     disp_handler;
@@ -58,8 +67,14 @@ typedef struct {
     nx_container_link_handler_t         outgoing_handler;
     nx_container_link_handler_t         writable_handler;
     nx_container_link_detach_handler_t  link_detach_handler;
-    nx_container_node_handler_t         node_created_handler;
-    nx_container_node_handler_t         node_destroyed_handler;
+
+    //
+    // Node-Type Handlers
+    //
+    nx_container_node_handler_t  node_created_handler;
+    nx_container_node_handler_t  node_destroyed_handler;
+    nx_container_conn_handler_t  inbound_conn_open_handler;
+    nx_container_conn_handler_t  outbound_conn_open_handler;
 } nx_node_type_t;
 
 void nx_container_initialize(void);
@@ -82,12 +97,17 @@ void nx_container_node_set_context(nx_node_t *node, void *node_context);
 nx_dist_mode_t nx_container_node_get_dist_modes(const nx_node_t *node);
 nx_lifetime_policy_t nx_container_node_get_life_policy(const nx_node_t *node);
 
+nx_link_t *nx_container_create_link(nx_node_t *node, nx_connection_t *conn, nx_direction_t dir, pn_terminus_t *term);
 
 
 void nx_link_set_context(nx_link_t *link, void *link_context);
 void *nx_link_get_context(nx_link_t *link);
 pn_link_t *nx_link_get_engine(nx_link_t *link);
 void nx_link_activate(nx_link_t *link);
+void nx_link_close(nx_link_t *link);
+
+
+typedef struct nx_link_item_t nx_link_item_t;
 
 struct nx_link_item_t {
     DEQ_LINKS(nx_link_item_t);
