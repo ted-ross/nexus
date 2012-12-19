@@ -27,7 +27,7 @@ typedef struct item_t {
     char letter;
 } item_t;
 
-typedef DEQ(item_t) item_list_t;
+DEQ_DECLARE(item_t, item_list_t);
 
 
 static char* list_well_formed(item_list_t list, char *key)

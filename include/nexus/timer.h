@@ -23,7 +23,7 @@
 
 typedef void (*nx_timer_cb_t)(void* context);
 typedef struct nx_timer_t nx_timer_t;
-typedef DEQ(nx_timer_t) nx_timer_list_t;
+DEQ_DECLARE(nx_timer_t, nx_timer_list_t);
 
 nx_timer_t *nx_timer(nx_timer_cb_t cb, void* context);
 void nx_timer_free(nx_timer_t *timer);

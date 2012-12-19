@@ -29,7 +29,7 @@ struct item_t {
     nx_alloc_type_desc_t *desc;
 };
 
-typedef DEQ(item_t) item_list_t;
+DEQ_DECLARE(item_t, item_list_t);
 
 struct nx_alloc_pool_t {
     item_list_t free_list;

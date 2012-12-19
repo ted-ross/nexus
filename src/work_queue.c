@@ -30,7 +30,7 @@ struct work_item_t {
     pn_connector_t *conn;
 };
 
-typedef DEQ(work_item_t) work_list_t;
+DEQ_DECLARE(work_item_t, work_list_t);
 
 struct work_queue_t {
     work_list_t items;

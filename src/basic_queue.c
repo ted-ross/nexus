@@ -33,8 +33,7 @@ typedef struct bq_link_item_t {
     nx_link_t *link;
 } bq_link_item_t;
 
-typedef DEQ(bq_link_item_t) bq_link_list_t;
-
+DEQ_DECLARE(bq_link_item_t, bq_link_list_t);
 ALLOC_DECLARE(bq_link_item_t);
 ALLOC_DEFINE(bq_link_item_t);
 

@@ -26,8 +26,8 @@
 typedef struct nx_message_t nx_message_t;
 typedef struct nx_buffer_t  nx_buffer_t;
 
-typedef DEQ(nx_buffer_t)  nx_buffer_list_t;
-typedef DEQ(nx_message_t) nx_message_list_t;
+DEQ_DECLARE(nx_buffer_t, nx_buffer_list_t);
+DEQ_DECLARE(nx_message_t, nx_message_list_t);
 
 typedef struct {
     nx_buffer_t *buffer;  // Buffer that contains the first octet of the field, null if the field is not present

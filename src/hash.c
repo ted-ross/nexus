@@ -34,8 +34,7 @@ typedef struct hash_item_t {
 
 ALLOC_DECLARE(hash_item_t);
 ALLOC_DEFINE(hash_item_t);
-
-typedef DEQ(hash_item_t) items_t;
+DEQ_DECLARE(hash_item_t, items_t);
 
 
 typedef struct bucket_t {

@@ -28,20 +28,12 @@
 #define NEW_ARRAY(t,n)     (t*)  malloc(sizeof(t)*(n))
 #define NEW_PTR_ARRAY(t,n) (t**) malloc(sizeof(t*)*(n))
 
-#define DEQ(t) struct { \
-    t      *head;       \
-    t      *tail;       \
-    t      *scratch;    \
-    size_t  size;       \
-    }
-
 #define DEQ_DECLARE(i,d) typedef struct { \
     i      *head;       \
     i      *tail;       \
     i      *scratch;    \
     size_t  size;       \
-    } d;
-
+    } d
 
 #define DEQ_LINKS(t) t *prev; t *next
 
