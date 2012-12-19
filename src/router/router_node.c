@@ -45,6 +45,9 @@ typedef struct {
     nx_message_list_t  out_fifo;
 } nx_router_link_t;
 
+ALLOC_DECLARE(nx_router_link_t);
+ALLOC_DEFINE(nx_router_link_t);
+
 
 static void router_tx_handler(void* context, nx_link_t *link, pn_delivery_t *delivery)
 {
@@ -211,7 +214,7 @@ static int router_outgoing_link_handler(void* context, nx_link_t *link)
     const char  *r_tgt   = pn_terminus_get_address(pn_link_remote_target(pn_link));
 
     sys_mutex_lock(router->lock);
-    nx_router_link_t *rlink = NEW(nx_router_link_t);
+    nx_router_link_t *rlink = new_nx_router_link_t();
     rlink->link = link;
     DEQ_INIT(rlink->out_fifo);
     nx_link_set_context(link, rlink);
@@ -276,9 +279,14 @@ static int router_link_detach_handler(void* context, nx_link_t *link, int closed
         item = DEQ_HEAD(router->out_links);
 
         nx_field_iterator_t *iter = nx_field_iterator_string(r_tgt, ITER_VIEW_NO_HOST);
-        hash_remove(router->out_hash, iter);
-        nx_field_iterator_free(iter);
-        printf("[Router - Removed local address: %s]\n", r_tgt);
+        nx_router_link_t    *rlink;
+        int result = hash_retrieve(router->out_hash, iter, (void*) &rlink);
+        if (result == 0) {
+            hash_remove(router->out_hash, iter);
+            nx_field_iterator_free(iter);
+            free_nx_router_link_t(rlink);
+            printf("[Router - Removed local address: %s]\n", r_tgt);
+        }
     }
     else
         item = DEQ_HEAD(router->in_links);
