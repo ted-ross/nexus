@@ -38,6 +38,7 @@ struct nx_node_t {
 
 ALLOC_DECLARE(nx_node_t);
 ALLOC_DEFINE(nx_node_t);
+ALLOC_DEFINE(nx_link_item_t);
 
 struct nx_link_t {
     pn_link_t *pn_link;

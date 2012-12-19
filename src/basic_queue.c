@@ -28,21 +28,12 @@
 #include <nexus/alloc.h>
 
 
-typedef struct bq_link_item_t {
-    DEQ_LINKS(struct bq_link_item_t);
-    nx_link_t *link;
-} bq_link_item_t;
-
-DEQ_DECLARE(bq_link_item_t, bq_link_list_t);
-ALLOC_DECLARE(bq_link_item_t);
-ALLOC_DEFINE(bq_link_item_t);
-
 struct basic_queue_t {
     char                        *name;
     nx_node_t                   *node;
     basic_queue_configuration_t *config;
-    bq_link_list_t               in_links;
-    bq_link_list_t               out_links;
+    nx_link_list_t               in_links;
+    nx_link_list_t               out_links;
     nx_message_list_t            fifo;
     sys_mutex_t                 *lock;
     unsigned long                in_messages;
@@ -106,7 +97,7 @@ static void bq_rx_handler(void* context, nx_link_t *link, pn_delivery_t *deliver
     basic_queue_t  *bq = (basic_queue_t*) context;
     pn_link_t      *pn_link = pn_delivery_link(delivery);
     nx_message_t   *msg;
-    bq_link_item_t *item;
+    nx_link_item_t *item;
 
     //
     // Receive the message into a local representation.  If the returned message
@@ -159,7 +150,7 @@ static int bq_incoming_link_handler(void* context, nx_link_t *link)
     const char     *name    = pn_link_name(pn_link);
     const char     *r_tgt   = pn_terminus_get_address(pn_link_remote_target(pn_link));
     const char     *r_src   = pn_terminus_get_address(pn_link_remote_source(pn_link));
-    bq_link_item_t *item    = new_bq_link_item_t();
+    nx_link_item_t *item    = new_nx_link_item_t();
 
     sys_mutex_lock(bq->lock);
     if (item) {
@@ -188,7 +179,7 @@ static int bq_outgoing_link_handler(void* context, nx_link_t *link)
     const char     *name    = pn_link_name(pn_link);
     const char     *r_tgt   = pn_terminus_get_address(pn_link_remote_target(pn_link));
     const char     *r_src   = pn_terminus_get_address(pn_link_remote_source(pn_link));
-    bq_link_item_t *item    = new_bq_link_item_t();
+    nx_link_item_t *item    = new_nx_link_item_t();
 
     sys_mutex_lock(bq->lock);
     if (item) {
@@ -240,7 +231,7 @@ static int bq_link_detach_handler(void* context, nx_link_t *link, int closed)
     const char     *name    = pn_link_name(pn_link);
     const char     *r_tgt   = pn_terminus_get_address(pn_link_remote_target(pn_link));
     const char     *r_src   = pn_terminus_get_address(pn_link_remote_source(pn_link));
-    bq_link_item_t *item;
+    nx_link_item_t *item;
 
     printf("[Basic Queue %s: Link Closed - name=%s source=%s target=%s]\n",
            bq->name, name, r_src, r_tgt);
@@ -258,7 +249,7 @@ static int bq_link_detach_handler(void* context, nx_link_t *link, int closed)
             } else {
                 DEQ_REMOVE(bq->in_links, item);
             }
-            free_bq_link_item_t(item);
+            free_nx_link_item_t(item);
             break;
         }
         item = item->next;

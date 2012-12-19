@@ -22,6 +22,7 @@
 #include <proton/engine.h>
 #include <nexus/server.h>
 #include <nexus/alloc.h>
+#include <nexus/ctools.h>
 
 typedef uint8_t nx_dist_mode_t;
 #define NX_DIST_COPY 0x01
@@ -39,6 +40,7 @@ typedef enum {
 
 typedef struct nx_node_t nx_node_t;
 typedef struct nx_link_t nx_link_t;
+typedef struct nx_link_item_t nx_link_item_t;
 
 typedef void (*nx_container_node_handler_t)        (void *type_context, nx_node_t *node);
 typedef void (*nx_container_delivery_handler_t)    (void *node_context, nx_link_t *link, pn_delivery_t *delivery);
@@ -86,5 +88,13 @@ void nx_link_set_context(nx_link_t *link, void *link_context);
 void *nx_link_get_context(nx_link_t *link);
 pn_link_t *nx_link_get_engine(nx_link_t *link);
 void nx_link_activate(nx_link_t *link);
+
+struct nx_link_item_t {
+    DEQ_LINKS(nx_link_item_t);
+    nx_link_t *link;
+};
+
+ALLOC_DECLARE(nx_link_item_t);
+DEQ_DECLARE(nx_link_item_t, nx_link_list_t);
 
 #endif

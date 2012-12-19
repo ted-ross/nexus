@@ -27,20 +27,11 @@
 #include <nexus/hash.h>
 #include <nexus/iterator.h>
 
-typedef struct rt_link_item_t {
-    DEQ_LINKS(struct rt_link_item_t);
-    nx_link_t *link;
-} rt_link_item_t;
-
-DEQ_DECLARE(rt_link_item_t, rt_link_list_t);
-
-ALLOC_DECLARE(rt_link_item_t);
-ALLOC_DEFINE(rt_link_item_t);
 
 struct nx_router_t {
     nx_node_t         *node;
-    rt_link_list_t     in_links;
-    rt_link_list_t     out_links;
+    nx_link_list_t     in_links;
+    nx_link_list_t     out_links;
     nx_message_list_t  in_fifo;
     sys_mutex_t       *lock;
     nx_timer_t        *timer;
@@ -192,7 +183,7 @@ static void router_disp_handler(void* context, nx_link_t *link, pn_delivery_t *d
 static int router_incoming_link_handler(void* context, nx_link_t *link)
 {
     nx_router_t    *router  = (nx_router_t*) context;
-    rt_link_item_t *item    = new_rt_link_item_t();
+    nx_link_item_t *item    = new_nx_link_item_t();
     pn_link_t      *pn_link = nx_link_get_engine(link);
 
     if (item) {
@@ -278,7 +269,7 @@ static int router_link_detach_handler(void* context, nx_link_t *link, int closed
     nx_router_t    *router  = (nx_router_t*) context;
     pn_link_t      *pn_link = nx_link_get_engine(link);
     const char     *r_tgt   = pn_terminus_get_address(pn_link_remote_target(pn_link));
-    rt_link_item_t *item;
+    nx_link_item_t *item;
 
     sys_mutex_lock(router->lock);
     if (pn_link_is_sender(pn_link)) {
@@ -298,7 +289,7 @@ static int router_link_detach_handler(void* context, nx_link_t *link, int closed
                 DEQ_REMOVE(router->out_links, item);
             else
                 DEQ_REMOVE(router->in_links, item);
-            free_rt_link_item_t(item);
+            free_nx_link_item_t(item);
             break;
         }
         item = item->next;
