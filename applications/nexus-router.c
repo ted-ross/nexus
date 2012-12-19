@@ -21,7 +21,6 @@
 #include <proton/driver.h>
 #include <nexus/server.h>
 #include <nexus/container.h>
-#include <nexus/link_allocator.h>
 #include <nexus/router.h>
 #include <nexus/timer.h>
 #include <signal.h>
@@ -88,7 +87,6 @@ static void startup(void *context)
 
 int main(int argc, char **argv)
 {
-    nx_link_allocator_initialize();
     nx_server_initialize(4);
     nx_container_initialize();
 

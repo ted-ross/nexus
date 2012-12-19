@@ -38,11 +38,12 @@ typedef enum {
 
 
 typedef struct nx_node_t nx_node_t;
+typedef struct nx_link_t nx_link_t;
 
 typedef void (*nx_container_node_handler_t)        (void *type_context, nx_node_t *node);
-typedef void (*nx_container_delivery_handler_t)    (void *node_context, pn_delivery_t *delivery, void *link_context);
-typedef int  (*nx_container_link_handler_t)        (void *node_context, pn_link_t *link);
-typedef int  (*nx_container_link_detach_handler_t) (void *node_context, pn_link_t *link, int closed);
+typedef void (*nx_container_delivery_handler_t)    (void *node_context, nx_link_t *link, pn_delivery_t *delivery);
+typedef int  (*nx_container_link_handler_t)        (void *node_context, nx_link_t *link);
+typedef int  (*nx_container_link_detach_handler_t) (void *node_context, nx_link_t *link, int closed);
 
 typedef struct {
     char                               *type_name;
@@ -79,8 +80,11 @@ void nx_container_node_set_context(nx_node_t *node, void *node_context);
 nx_dist_mode_t nx_container_node_get_dist_modes(const nx_node_t *node);
 nx_lifetime_policy_t nx_container_node_get_life_policy(const nx_node_t *node);
 
-void nx_container_set_link_context(pn_link_t *link, void *link_context);
-void *nx_container_get_link_context(pn_link_t *link);
-void nx_container_activate_link(pn_link_t *link);
+
+
+void nx_link_set_context(nx_link_t *link, void *link_context);
+void *nx_link_get_context(nx_link_t *link);
+pn_link_t *nx_link_get_engine(nx_link_t *link);
+void nx_link_activate(nx_link_t *link);
 
 #endif

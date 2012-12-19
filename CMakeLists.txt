@@ -68,7 +68,6 @@ set(server_SOURCES
     src/container.c
     src/hash.c
     src/iterator.c
-    src/link_allocator.c
     src/message.c
     src/posix/threading.c
     src/server.c

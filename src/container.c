@@ -27,7 +27,6 @@
 #include <nexus/hash.h>
 #include <nexus/threading.h>
 #include <nexus/iterator.h>
-#include <nexus/link_allocator.h>
 
 struct nx_node_t {
     const nx_node_type_t *ntype;
@@ -40,17 +39,26 @@ struct nx_node_t {
 ALLOC_DECLARE(nx_node_t);
 ALLOC_DEFINE(nx_node_t);
 
+struct nx_link_t {
+    pn_link_t *pn_link;
+    void      *context;
+    nx_node_t *node;
+};
+
+ALLOC_DECLARE(nx_link_t);
+ALLOC_DEFINE(nx_link_t);
+
 static hash_t      *node_type_map;
 static hash_t      *node_map;
 static sys_mutex_t *lock;
 static nx_node_t   *default_node;
 
-static void setup_outgoing_link(pn_link_t *link)
+static void setup_outgoing_link(pn_link_t *pn_link)
 {
     sys_mutex_lock(lock);
-    nx_node_t   *node;
+    nx_node_t  *node;
     int         result;
-    const char *source = pn_terminus_get_address(pn_link_remote_source(link));
+    const char *source = pn_terminus_get_address(pn_link_remote_source(pn_link));
     nx_field_iterator_t *iter;
     // TODO - Extract the name from the structured source
 
@@ -68,25 +76,32 @@ static void setup_outgoing_link(pn_link_t *link)
         else {
             // Reject the link
             // TODO - When the API allows, add an error message for "no available node"
-            pn_link_close(link);
+            pn_link_close(pn_link);
             return;
         }
     }
 
-    nx_link_item_t *item = nx_link_item(link);
-    item->container_context = node;
+    nx_link_t *link = new_nx_link_t();
+    if (!link) {
+        pn_link_close(pn_link);
+        return;
+    }
 
-    pn_link_set_context(link, item);
+    link->pn_link = pn_link;
+    link->context = 0;
+    link->node    = node;
+
+    pn_link_set_context(pn_link, link);
     node->ntype->outgoing_handler(node->context, link);
 }
 
 
-static void setup_incoming_link(pn_link_t *link)
+static void setup_incoming_link(pn_link_t *pn_link)
 {
     sys_mutex_lock(lock);
     nx_node_t   *node;
     int          result;
-    const char  *target = pn_terminus_get_address(pn_link_remote_target(link));
+    const char  *target = pn_terminus_get_address(pn_link_remote_target(pn_link));
     nx_field_iterator_t *iter;
     // TODO - Extract the name from the structured target
 
@@ -104,26 +119,33 @@ static void setup_incoming_link(pn_link_t *link)
         else {
             // Reject the link
             // TODO - When the API allows, add an error message for "no available node"
-            pn_link_close(link);
+            pn_link_close(pn_link);
             return;
         }
     }
 
-    nx_link_item_t *item = nx_link_item(link);
-    item->container_context = node;
+    nx_link_t *link = new_nx_link_t();
+    if (!link) {
+        pn_link_close(pn_link);
+        return;
+    }
 
-    pn_link_set_context(link, item);
+    link->pn_link = pn_link;
+    link->context = 0;
+    link->node    = node;
+
+    pn_link_set_context(pn_link, link);
     node->ntype->incoming_handler(node->context, link);
 }
 
 
-static int do_writable(pn_link_t *link)
+static int do_writable(pn_link_t *pn_link)
 {
-    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
-    if (!item)
+    nx_link_t *link = (nx_link_t*) pn_link_get_context(pn_link);
+    if (!link)
         return 0;
 
-    nx_node_t *node = (nx_node_t*) item->container_context;
+    nx_node_t *node = link->node;
     if (!node)
         return 0;
 
@@ -133,13 +155,13 @@ static int do_writable(pn_link_t *link)
 
 static void process_receive(pn_delivery_t *delivery)
 {
-    pn_link_t      *link = pn_delivery_link(delivery);
-    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
+    pn_link_t *pn_link = pn_delivery_link(delivery);
+    nx_link_t *link    = (nx_link_t*) pn_link_get_context(pn_link);
 
-    if (item) {
-        nx_node_t *node = (nx_node_t*) item->container_context;
+    if (link) {
+        nx_node_t *node = link->node;
         if (node) {
-            node->ntype->rx_handler(node->context, delivery, item->node_context);
+            node->ntype->rx_handler(node->context, link, delivery);
             return;
         }
     }
@@ -147,8 +169,8 @@ static void process_receive(pn_delivery_t *delivery)
     //
     // Reject the delivery if we couldn't find a node to handle it
     //
-    pn_link_advance(link);
-    pn_link_flow(link, 1);
+    pn_link_advance(pn_link);
+    pn_link_flow(pn_link, 1);
     pn_delivery_update(delivery, PN_REJECTED);
     pn_delivery_settle(delivery);
 }
@@ -156,13 +178,13 @@ static void process_receive(pn_delivery_t *delivery)
 
 static void do_send(pn_delivery_t *delivery)
 {
-    pn_link_t      *link = pn_delivery_link(delivery);
-    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
+    pn_link_t *pn_link = pn_delivery_link(delivery);
+    nx_link_t *link    = (nx_link_t*) pn_link_get_context(pn_link);
 
-    if (item) {
-        nx_node_t *node = (nx_node_t*) item->container_context;
+    if (link) {
+        nx_node_t *node = link->node;
         if (node) {
-            node->ntype->tx_handler(node->context, delivery, item->node_context);
+            node->ntype->tx_handler(node->context, link, delivery);
             return;
         }
     }
@@ -173,13 +195,13 @@ static void do_send(pn_delivery_t *delivery)
 
 static void do_updated(pn_delivery_t *delivery)
 {
-    pn_link_t      *link = pn_delivery_link(delivery);
-    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
+    pn_link_t *pn_link = pn_delivery_link(delivery);
+    nx_link_t *link    = (nx_link_t*) pn_link_get_context(pn_link);
 
-    if (item) {
-        nx_node_t *node = (nx_node_t*) item->container_context;
+    if (link) {
+        nx_node_t *node = link->node;
         if (node)
-            node->ntype->disp_handler(node->context, delivery, item->node_context);
+            node->ntype->disp_handler(node->context, link, delivery);
     }
 }
 
@@ -190,14 +212,15 @@ static int close_handler(void* unused, pn_connection_t *conn)
     // Close all links, passing False as the 'closed' argument.  These links are not
     // being properly 'detached'.  They are being orphaned.
     //
-    pn_link_t *link = pn_link_head(conn, 0);
-    while (link) {
-        nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
-        nx_node_t      *node = (nx_node_t*) item->container_context;
+    pn_link_t *pn_link = pn_link_head(conn, 0);
+    while (pn_link) {
+        nx_link_t *link = (nx_link_t*) pn_link_get_context(pn_link);
+        nx_node_t *node = link->node;
         if (node)
             node->ntype->link_detach_handler(node->context, link, 0);
-        pn_link_close(link);
-        link = pn_link_next(link, 0);
+        pn_link_close(pn_link);
+        free_nx_link_t(link);
+        pn_link = pn_link_next(pn_link, 0);
     }
 
     // teardown all sessions
@@ -216,7 +239,7 @@ static int close_handler(void* unused, pn_connection_t *conn)
 static int process_handler(void* unused, pn_connection_t *conn)
 {
     pn_session_t    *ssn;
-    pn_link_t       *link;
+    pn_link_t       *pn_link;
     pn_delivery_t   *delivery;
     int              event_count = 0;
 
@@ -238,13 +261,13 @@ static int process_handler(void* unused, pn_connection_t *conn)
     }
 
     // configure and open any pending links
-    link = pn_link_head(conn, PN_LOCAL_UNINIT);
-    while (link) {
-        if (pn_link_is_sender(link))
-            setup_outgoing_link(link);
+    pn_link = pn_link_head(conn, PN_LOCAL_UNINIT);
+    while (pn_link) {
+        if (pn_link_is_sender(pn_link))
+            setup_outgoing_link(pn_link);
         else
-            setup_incoming_link(link);
-        link = pn_link_next(link, PN_LOCAL_UNINIT);
+            setup_incoming_link(pn_link);
+        pn_link = pn_link_next(pn_link, PN_LOCAL_UNINIT);
         event_count++;
     }
 
@@ -271,12 +294,12 @@ static int process_handler(void* unused, pn_connection_t *conn)
     // outgoing links with non-zero credit.  Call the attached node's
     // writable handler for such links.
     //
-    link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_ACTIVE);
-    while (link) {
-        assert(pn_session_connection(pn_link_session(link)) == conn);
-        if (pn_link_is_sender(link) && pn_link_credit(link) > 0)
-            event_count += do_writable(link);
-        link = pn_link_next(link, PN_LOCAL_ACTIVE | PN_REMOTE_ACTIVE);
+    pn_link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_ACTIVE);
+    while (pn_link) {
+        assert(pn_session_connection(pn_link_session(pn_link)) == conn);
+        if (pn_link_is_sender(pn_link) && pn_link_credit(pn_link) > 0)
+            event_count += do_writable(pn_link);
+        pn_link = pn_link_next(pn_link, PN_LOCAL_ACTIVE | PN_REMOTE_ACTIVE);
     }
 
     // Step 3: Clean up any links or sessions that have been closed by the
@@ -284,14 +307,14 @@ static int process_handler(void* unused, pn_connection_t *conn)
     // also.
 
     // teardown any terminating links
-    link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
-    while (link) {
-        nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
-        nx_node_t      *node = (nx_node_t*) item->container_context;
+    pn_link = pn_link_head(conn, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
+    while (pn_link) {
+        nx_link_t *link = (nx_link_t*) pn_link_get_context(pn_link);
+        nx_node_t *node = link->node;
         if (node)
             node->ntype->link_detach_handler(node->context, link, 1); // TODO - get 'closed' from detach message
-        pn_link_close(link);
-        link = pn_link_next(link, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
+        pn_link_close(pn_link);
+        pn_link = pn_link_next(pn_link, PN_LOCAL_ACTIVE | PN_REMOTE_CLOSED);
         event_count++;
     }
 
@@ -449,29 +472,30 @@ nx_lifetime_policy_t nx_container_node_get_life_policy(const nx_node_t *node)
 }
 
 
-void nx_container_set_link_context(pn_link_t *link, void *link_context)
+void nx_link_set_context(nx_link_t *link, void *context)
 {
-    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
-    if (item)
-        item->node_context = link_context;
+    link->context = context;
 }
 
 
-void *nx_container_get_link_context(pn_link_t *link)
+void *nx_link_get_context(nx_link_t *link)
 {
-    nx_link_item_t *item = (nx_link_item_t*) pn_link_get_context(link);
-    if (item)
-        return item->node_context;
-    return 0;
+    return link->context;
 }
 
 
-void nx_container_activate_link(pn_link_t *link)
+pn_link_t *nx_link_get_engine(nx_link_t *link)
 {
-    if (!link)
+    return link->pn_link;
+}
+
+
+void nx_link_activate(nx_link_t *link)
+{
+    if (!link || !link->pn_link)
         return;
 
-    pn_session_t *sess = pn_link_session(link);
+    pn_session_t *sess = pn_link_session(link->pn_link);
     if (!sess)
         return;
 
