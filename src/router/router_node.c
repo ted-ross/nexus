@@ -235,6 +235,7 @@ static int router_outgoing_link_handler(void* context, nx_link_t *link)
         return 0;
     }
 
+    nx_log(module, LOG_TRACE, "Address '%s' not registered as it already exists", r_tgt);
     pn_link_close(pn_link);
     sys_mutex_unlock(router->lock);
     return 0;
@@ -285,6 +286,7 @@ static int router_link_detach_handler(void* context, nx_link_t *link, int closed
         nx_router_link_t    *rlink;
         int result = hash_retrieve(router->out_hash, iter, (void*) &rlink);
         if (result == 0) {
+            nx_field_iterator_reset(iter, ITER_VIEW_NO_HOST);
             hash_remove(router->out_hash, iter);
             nx_field_iterator_free(iter);
             free_nx_router_link_t(rlink);
