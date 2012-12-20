@@ -38,10 +38,8 @@ void auth_client_handler(pn_connector_t *cxtr)
     state = pn_sasl_state(sasl);
 
     if        (state == PN_SASL_PASS) {
-        printf("client pass\n");
         ctx->state = CONN_STATE_OPENING;
     } else if (state == PN_SASL_FAIL) {
-        printf("client fail\n");
         ctx->state = CONN_STATE_FAILED;
     }
 }

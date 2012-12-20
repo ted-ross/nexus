@@ -20,6 +20,7 @@
 
 #include <nexus/ctools.h>
 #include <nexus/threading.h>
+#include <nexus/log.h>
 #include "server_private.h"
 #include "timer_private.h"
 #include "alloc_private.h"
@@ -28,6 +29,8 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <signal.h>
+
+static char *module="SERVER";
 
 typedef struct nx_thread_t {
     int           thread_id;
@@ -104,7 +107,7 @@ static void thread_process_listeners(pn_driver_t *driver)
     nx_connection_t *ctx;
 
     while (listener) {
-        //printf("[Accepting Connection]\n");
+        nx_log(module, LOG_TRACE, "Accepting Connection");
         cxtr = pn_listener_accept(listener);
         ctx = new_nx_connection_t();
         ctx->state        = CONN_STATE_SASL_SERVER;
@@ -365,7 +368,7 @@ static void *thread_run(void *arg)
                     error = pn_driver_wait_2(nx_server->driver, duration);
                 } while (error == PN_INTR);
                 if (error) {
-                    printf("Driver Error: %s\n", pn_error_text(pn_error(nx_server->driver)));
+                    nx_log(module, LOG_ERROR, "Driver Error: %s", pn_error_text(pn_error(nx_server->driver)));
                     exit(-1);
                 }
 
@@ -548,7 +551,7 @@ static void cxtr_try_open(void *context)
 
     ct->ctx   = ctx;
     ct->delay = 5000;
-    printf("[Server: Connecting to %s:%s]\n", ct->config->host, ct->config->port);
+    nx_log(module, LOG_TRACE, "Connecting to %s:%s", ct->config->host, ct->config->port);
 }
 
 
@@ -650,10 +653,14 @@ void nx_server_run(void)
     for (i = 1; i < nx_server->thread_count; i++)
         thread_start(nx_server->threads[i]);
 
+    nx_log(module, LOG_INFO, "Operational, %d Threads Running", nx_server->thread_count);
+
     thread_run((void*) nx_server->threads[0]);
 
     for (i = 1; i < nx_server->thread_count; i++)
         thread_join(nx_server->threads[i]);
+
+    nx_log(module, LOG_INFO, "Shut Down");
 }
 
 
@@ -759,12 +766,12 @@ nx_listener_t *nx_server_listen(const nx_server_config_t *config, void *context)
     li->pn_listener = pn_listener(nx_server->driver, config->host, config->port, (void*) li);
 
     if (!li->pn_listener) {
-        printf("[Driver Error %d (%s)]\n",
+        nx_log(module, LOG_ERROR, "Driver Error %d (%s)",
                pn_driver_errno(nx_server->driver), pn_driver_error(nx_server->driver));
         free_nx_listener_t(li);
         return 0;
     }
-    printf("[Server: Listening on %s:%s]\n", config->host, config->port);
+    nx_log(module, LOG_TRACE, "Listening on %s:%s", config->host, config->port);
 
     return li;
 }

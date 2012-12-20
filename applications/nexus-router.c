@@ -29,7 +29,6 @@ static int exit_with_sigint = 0;
 
 static void thread_start_handler(void* context, int thread_id)
 {
-    //printf("[Thread Started - id=%d]\n", thread_id);
 }
 
 
@@ -42,6 +41,7 @@ static void signal_handler(void* context, int signum)
         exit_with_sigint = 1;
 
     case SIGQUIT:
+    case SIGTERM:
         fflush(stdout);
         nx_server_stop();
         break;
@@ -100,6 +100,7 @@ int main(int argc, char **argv)
 
     nx_server_signal(SIGHUP);
     nx_server_signal(SIGQUIT);
+    nx_server_signal(SIGTERM);
     nx_server_signal(SIGINT);
 
     nx_server_run();

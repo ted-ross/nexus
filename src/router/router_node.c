@@ -26,7 +26,9 @@
 #include <nexus/ctools.h>
 #include <nexus/hash.h>
 #include <nexus/iterator.h>
+#include <nexus/log.h>
 
+static char *module="ROUTER_NODE";
 
 struct nx_router_t {
     nx_node_t         *node;
@@ -190,6 +192,7 @@ static int router_incoming_link_handler(void* context, nx_link_t *link)
     pn_link_t      *pn_link = nx_link_get_engine(link);
 
     if (item) {
+        DEQ_ITEM_INIT(item);
         item->link = link;
 
         sys_mutex_lock(router->lock);
@@ -228,7 +231,7 @@ static int router_outgoing_link_handler(void* context, nx_link_t *link)
         pn_terminus_copy(pn_link_target(pn_link), pn_link_remote_target(pn_link));
         pn_link_open(pn_link);
         sys_mutex_unlock(router->lock);
-        printf("[Router - Registered new local address: %s]\n", r_tgt);
+        nx_log(module, LOG_TRACE, "Registered new local address: %s", r_tgt);
         return 0;
     }
 
@@ -285,7 +288,7 @@ static int router_link_detach_handler(void* context, nx_link_t *link, int closed
             hash_remove(router->out_hash, iter);
             nx_field_iterator_free(iter);
             free_nx_router_link_t(rlink);
-            printf("[Router - Removed local address: %s]\n", r_tgt);
+            nx_log(module, LOG_TRACE, "Removed local address: %s", r_tgt);
         }
     }
     else
@@ -310,13 +313,11 @@ static int router_link_detach_handler(void* context, nx_link_t *link, int closed
 
 static void router_inbound_open_handler(void *type_context, nx_connection_t *conn)
 {
-    printf("router_inbound_open_handler\n");
 }
 
 
 static void router_outbound_open_handler(void *type_context, nx_connection_t *conn)
 {
-    printf("router_outbound_open_handler\n");
 }
 
 

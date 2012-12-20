@@ -27,6 +27,9 @@
 #include <nexus/hash.h>
 #include <nexus/threading.h>
 #include <nexus/iterator.h>
+#include <nexus/log.h>
+
+static char *module="CONTAINER";
 
 struct nx_node_t {
     const nx_node_type_t *ntype;
@@ -392,7 +395,7 @@ static int handler(void* context, nx_conn_event_t event, nx_connection_t *nx_con
 
 void nx_container_initialize(void)
 {
-    printf("[Container Initializing]\n");
+    nx_log(module, LOG_TRACE, "Container Initializing");
 
     // TODO - move allocator init to server?
     const nx_allocator_config_t *alloc_config = nx_allocator_default_config();
@@ -429,7 +432,7 @@ int nx_container_register_node_type(const nx_node_type_t *nt)
     nx_field_iterator_free(iter);
     if (result < 0)
         return result;
-    printf("[Container: Node Type Registered - %s]\n", nt->type_name);
+    nx_log(module, LOG_TRACE, "Node Type Registered - %s", nt->type_name);
 
     return 0;
 }
@@ -442,10 +445,13 @@ void nx_container_set_default_node_type(const nx_node_type_t *nt,
     if (default_node)
         nx_container_destroy_node(default_node);
 
-    if (nt)
+    if (nt) {
         default_node = nx_container_create_node(nt, 0, context, supported_dist, NX_LIFE_PERMANENT);
-    else
+        nx_log(module, LOG_TRACE, "Node of type '%s' installed as default node", nt->type_name);
+    } else {
         default_node = 0;
+        nx_log(module, LOG_TRACE, "Default node removed");
+    }
 }
 
 
