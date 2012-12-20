@@ -17,7 +17,6 @@
  * under the License.
  */
 
-
 #include <nexus/ctools.h>
 #include <nexus/threading.h>
 #include <nexus/log.h>
@@ -27,7 +26,7 @@
 #include "auth.h"
 #include "work_queue.h"
 #include <stdio.h>
-#include <sys/time.h>
+#include <time.h>
 #include <signal.h>
 
 static char *module="SERVER";
@@ -266,6 +265,8 @@ static void *thread_run(void *arg)
     pn_connection_t *conn;
     nx_connection_t *ctx;
     int              error;
+    int              poll_result;
+    int              timer_holdoff = 0;
 
     if (!thread)
         return 0;
@@ -365,7 +366,10 @@ static void *thread_run(void *arg)
                 sys_mutex_unlock(nx_server->lock);
 
                 do {
-                    error = pn_driver_wait_2(nx_server->driver, duration);
+                    error = 0;
+                    poll_result = pn_driver_wait_2(nx_server->driver, duration);
+                    if (poll_result == -1)
+                        error = pn_driver_errno(nx_server->driver);
                 } while (error == PN_INTR);
                 if (error) {
                     nx_log(module, LOG_ERROR, "Driver Error: %s", pn_error_text(pn_error(nx_server->driver)));
@@ -381,13 +385,15 @@ static void *thread_run(void *arg)
                 }
 
                 //
-                // Visit the timer module.  Note that this is probably not a very efficient way
-                // to do this.  TODO - make it more efficient.
+                // Visit the timer module.
                 //
-                struct timeval tv;
-                gettimeofday(&tv, 0);
-                long milliseconds = tv.tv_sec * 1000 + tv.tv_usec / 1000;
-                nx_timer_visit_LH(milliseconds);
+                if (poll_result == 0 || ++timer_holdoff == 100) {
+                    struct timespec tv;
+                    clock_gettime(CLOCK_REALTIME, &tv);
+                    long milliseconds = tv.tv_sec * 1000 + tv.tv_nsec / 1000000;
+                    nx_timer_visit_LH(milliseconds);
+                    timer_holdoff = 0;
+                }
 
                 //
                 // Process listeners (incoming connections).

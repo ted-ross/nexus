@@ -53,6 +53,7 @@ include_directories(
 ##
 find_library(proton_lib qpid-proton)
 find_library(pthread_lib pthread)
+find_library(rt_lib rt)
 find_path(proton_include proton/driver.h)
 
 set(CMAKE_C_FLAGS "-pthread -Wall -Werror")
@@ -77,7 +78,7 @@ set(server_SOURCES
     )
 
 add_library(nexus-server SHARED ${server_SOURCES})
-target_link_libraries(nexus-server ${proton_lib} ${pthread_lib})
+target_link_libraries(nexus-server ${proton_lib} ${pthread_lib} ${rt_lib})
 set_target_properties(nexus-server PROPERTIES
                       VERSION "${SO_VERSION}"
                       SOVERSION "${SO_VERSION_MAJOR}"
