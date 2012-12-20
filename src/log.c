@@ -22,6 +22,8 @@
 #include <stdio.h>
 #include <string.h>
 
+static int mask=LOG_INFO;
+
 static char *cls_prefix(int cls)
 {
     switch (cls) {
@@ -35,6 +37,9 @@ static char *cls_prefix(int cls)
 
 void nx_log(char *module, int cls, char *fmt, ...)
 {
+    if (!(cls & mask))
+        return;
+
     va_list ap;
     char    line[128];
 
@@ -44,4 +49,8 @@ void nx_log(char *module, int cls, char *fmt, ...)
     fprintf(stderr, "%s (%s): %s\n", module, cls_prefix(cls), line);
 }
 
+void nx_log_set_mask(int _mask)
+{
+    mask = _mask;
+}
 

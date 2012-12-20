@@ -26,6 +26,7 @@
 #include "test_case.h"
 #include <nexus/server.h>
 #include <nexus/threading.h>
+#include <nexus/log.h>
 
 #define THREAD_COUNT 4
 #define OCTET_COUNT  100
@@ -181,6 +182,7 @@ int server_tests(void)
 {
     int result = 0;
     test_lock = sys_mutex();
+    nx_log_set_mask(LOG_NONE);
 
     TEST_CASE(test_start_handler, 0);
     TEST_CASE(test_user_fd, 0);

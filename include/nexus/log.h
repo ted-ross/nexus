@@ -19,10 +19,13 @@
  * under the License.
  */
 
+#define LOG_NONE  0x00000000
 #define LOG_TRACE 0x00000001
 #define LOG_ERROR 0x00000002
-#define LOG_INFO  0x00000003
+#define LOG_INFO  0x00000004
 
 void nx_log(char *module, int cls, char *fmt, ...);
+
+void nx_log_set_mask(int mask);
 
 #endif

@@ -23,6 +23,7 @@
 #include <nexus/container.h>
 #include <nexus/router.h>
 #include <nexus/timer.h>
+#include <nexus/log.h>
 #include <signal.h>
 
 static int exit_with_sigint = 0;
@@ -87,6 +88,8 @@ static void startup(void *context)
 
 int main(int argc, char **argv)
 {
+    nx_log_set_mask(LOG_INFO | LOG_TRACE | LOG_ERROR);
+
     nx_server_initialize(4);
     nx_container_initialize();
 
