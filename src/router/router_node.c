@@ -115,7 +115,7 @@ static void router_rx_handler(void* context, nx_link_t *link, pn_delivery_t *del
     if (!msg)
         return;
 
-    valid_message = nx_message_check(msg);
+    valid_message = nx_message_check(msg, NX_DEPTH_MESSAGE_PROPERTIES);
 
     pn_link_advance(pn_link);
     pn_link_flow(pn_link, 1);

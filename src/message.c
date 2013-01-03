@@ -190,7 +190,7 @@ static int start_list(unsigned char **cursor, nx_buffer_t **buffer)
 //
 // Check the buffer chain, starting at cursor to see if it matches the pattern.
 // If the pattern matches, check the next tag to see if it's in the set of expected
-// tags.  If not, return zero.  If so, set the location descriptor to to good
+// tags.  If not, return zero.  If so, set the location descriptor to the good
 // tag and advance the cursor (and buffer, if needed) to the end of the matched section.
 //
 // If there is no match, don't advance the cursor.
@@ -262,6 +262,7 @@ static int nx_check_and_advance(nx_buffer_t         **buffer,
 
     case 0xd0 : // list32
     case 0xd1 : // map32
+    case 0xb0 : // vbin32
         consume |= ((int) next_octet(&test_cursor, &test_buffer)) << 24;
         if (!test_cursor) return 0;
         consume |= ((int) next_octet(&test_cursor, &test_buffer)) << 16;
@@ -272,6 +273,7 @@ static int nx_check_and_advance(nx_buffer_t         **buffer,
 
     case 0xc0 : // list8
     case 0xc1 : // map8
+    case 0xa0 : // vbin8
         consume |= (int) next_octet(&test_cursor, &test_buffer);
         if (!test_cursor) return 0;
         break;
@@ -382,6 +384,14 @@ nx_message_t *nx_allocate_message(void)
     msg->section_message_annotation.parsed = 0;
     msg->section_message_properties.buffer = 0;
     msg->section_message_properties.parsed = 0;
+    msg->section_application_properties.buffer = 0;
+    msg->section_application_properties.parsed = 0;
+    msg->body_data.buffer = 0;
+    msg->body_data.parsed = 0;
+    msg->body_amqp_sequence.buffer = 0;
+    msg->body_amqp_sequence.parsed = 0;
+    msg->section_footer.buffer = 0;
+    msg->section_footer.parsed = 0;
     msg->field_user_id.buffer = 0;
     msg->field_user_id.parsed = 0;
     msg->field_to.buffer = 0;
@@ -561,21 +571,30 @@ nx_message_t *nx_message_receive(pn_delivery_t *delivery)
 }
 
 
-int nx_message_check(nx_message_t *msg)
+int nx_message_check(nx_message_t *msg, nx_message_depth_t depth)
 {
 
 #define LONG  10
 #define SHORT 3
-#define MSG_HDR_LONG              (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x70"
-#define MSG_HDR_SHORT             (unsigned char*) "\x00\x53\x70"
-#define DELIVERY_ANNOTATION_LONG  (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x71"
-#define DELIVERY_ANNOTATION_SHORT (unsigned char*) "\x00\x53\x71"
-#define MESSAGE_ANNOTATION_LONG   (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x72"
-#define MESSAGE_ANNOTATION_SHORT  (unsigned char*) "\x00\x53\x72"
-#define MESSAGE_PROPERTIES_LONG   (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x73"
-#define MESSAGE_PROPERTIES_SHORT  (unsigned char*) "\x00\x53\x73"
-#define TAGS_LIST                 (unsigned char*) "\x45\xc0\xd0"
-#define TAGS_MAP                  (unsigned char*) "\xc1\xd1"
+#define MSG_HDR_LONG                  (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x70"
+#define MSG_HDR_SHORT                 (unsigned char*) "\x00\x53\x70"
+#define DELIVERY_ANNOTATION_LONG      (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x71"
+#define DELIVERY_ANNOTATION_SHORT     (unsigned char*) "\x00\x53\x71"
+#define MESSAGE_ANNOTATION_LONG       (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x72"
+#define MESSAGE_ANNOTATION_SHORT      (unsigned char*) "\x00\x53\x72"
+#define MESSAGE_PROPERTIES_LONG       (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x73"
+#define MESSAGE_PROPERTIES_SHORT      (unsigned char*) "\x00\x53\x73"
+#define APPLICATION_PROPERTIES_LONG   (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x74"
+#define APPLICATION_PROPERTIES_SHORT  (unsigned char*) "\x00\x53\x74"
+#define BODY_DATA_LONG                (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x75"
+#define BODY_DATA_SHORT               (unsigned char*) "\x00\x53\x75"
+#define BODY_SEQUENCE_LONG            (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x76"
+#define BODY_SEQUENCE_SHORT           (unsigned char*) "\x00\x53\x76"
+#define FOOTER_LONG                   (unsigned char*) "\x00\x80\x00\x00\x00\x00\x00\x00\x00\x78"
+#define FOOTER_SHORT                  (unsigned char*) "\x00\x53\x78"
+#define TAGS_LIST                     (unsigned char*) "\x45\xc0\xd0"
+#define TAGS_MAP                      (unsigned char*) "\xc1\xd1"
+#define TAGS_BINARY                   (unsigned char*) "\xa0\xb0"
 
     nx_buffer_t   *buffer = DEQ_HEAD(msg->buffers);
     unsigned char *cursor;
@@ -583,23 +602,87 @@ int nx_message_check(nx_message_t *msg)
     if (!buffer)
         return 0; // Invalid - No data in the message
 
+    if (depth == NX_DEPTH_NONE)
+        return 1;
+
     cursor = nx_buffer_base(buffer);
 
-    if (0 == nx_check_and_advance(&buffer, &cursor, MSG_HDR_LONG,              LONG,  TAGS_LIST, &msg->section_message_header))
+    //
+    // MESSAGE HEADER
+    //
+    if (0 == nx_check_and_advance(&buffer, &cursor, MSG_HDR_LONG,  LONG,  TAGS_LIST, &msg->section_message_header))
         return 0;
-    if (0 == nx_check_and_advance(&buffer, &cursor, MSG_HDR_SHORT,             SHORT, TAGS_LIST, &msg->section_message_header))
+    if (0 == nx_check_and_advance(&buffer, &cursor, MSG_HDR_SHORT, SHORT, TAGS_LIST, &msg->section_message_header))
         return 0;
+
+    if (depth == NX_DEPTH_HEADER)
+        return 1;
+
+    //
+    // DELIVERY ANNOTATION
+    //
     if (0 == nx_check_and_advance(&buffer, &cursor, DELIVERY_ANNOTATION_LONG,  LONG,  TAGS_MAP,  &msg->section_delivery_annotation))
         return 0;
     if (0 == nx_check_and_advance(&buffer, &cursor, DELIVERY_ANNOTATION_SHORT, SHORT, TAGS_MAP,  &msg->section_delivery_annotation))
         return 0;
-    if (0 == nx_check_and_advance(&buffer, &cursor, MESSAGE_ANNOTATION_LONG,   LONG,  TAGS_MAP,  &msg->section_message_annotation))
+
+    if (depth == NX_DEPTH_DELIVERY_ANNOTATIONS)
+        return 1;
+
+    //
+    // MESSAGE ANNOTATION
+    //
+    if (0 == nx_check_and_advance(&buffer, &cursor, MESSAGE_ANNOTATION_LONG,  LONG,  TAGS_MAP,  &msg->section_message_annotation))
         return 0;
-    if (0 == nx_check_and_advance(&buffer, &cursor, MESSAGE_ANNOTATION_SHORT,  SHORT, TAGS_MAP,  &msg->section_message_annotation))
+    if (0 == nx_check_and_advance(&buffer, &cursor, MESSAGE_ANNOTATION_SHORT, SHORT, TAGS_MAP,  &msg->section_message_annotation))
         return 0;
-    if (0 == nx_check_and_advance(&buffer, &cursor, MESSAGE_PROPERTIES_LONG,   LONG,  TAGS_LIST, &msg->section_message_properties))
+
+    if (depth == NX_DEPTH_MESSAGE_ANNOTATIONS)
+        return 1;
+
+    //
+    // MESSAGE PROPERTIES
+    //
+    if (0 == nx_check_and_advance(&buffer, &cursor, MESSAGE_PROPERTIES_LONG,  LONG,  TAGS_LIST, &msg->section_message_properties))
         return 0;
-    if (0 == nx_check_and_advance(&buffer, &cursor, MESSAGE_PROPERTIES_SHORT,  SHORT, TAGS_LIST, &msg->section_message_properties))
+    if (0 == nx_check_and_advance(&buffer, &cursor, MESSAGE_PROPERTIES_SHORT, SHORT, TAGS_LIST, &msg->section_message_properties))
+        return 0;
+
+    if (depth == NX_DEPTH_MESSAGE_PROPERTIES)
+        return 1;
+
+    //
+    // APPLICATION PROPERTIES
+    //
+    if (0 == nx_check_and_advance(&buffer, &cursor, APPLICATION_PROPERTIES_LONG,  LONG,  TAGS_MAP, &msg->section_application_properties))
+        return 0;
+    if (0 == nx_check_and_advance(&buffer, &cursor, APPLICATION_PROPERTIES_SHORT, SHORT, TAGS_MAP, &msg->section_application_properties))
+        return 0;
+
+    if (depth == NX_DEPTH_APPLICATION_PROPERTIES)
+        return 1;
+
+    //
+    // BODY  (Note that this function expects a single data section or a single AMQP sequence)
+    //
+    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_DATA_LONG,      LONG,  TAGS_BINARY, &msg->body_data))
+        return 0;
+    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_DATA_SHORT,     SHORT, TAGS_BINARY, &msg->body_data))
+        return 0;
+    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_SEQUENCE_LONG,  LONG,  TAGS_LIST,   &msg->body_amqp_sequence))
+        return 0;
+    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_SEQUENCE_SHORT, SHORT, TAGS_LIST,   &msg->body_amqp_sequence))
+        return 0;
+
+    if (depth == NX_DEPTH_BODY)
+        return 1;
+
+    //
+    // FOOTER
+    //
+    if (0 == nx_check_and_advance(&buffer, &cursor, FOOTER_LONG,  LONG,  TAGS_MAP, &msg->section_footer))
+        return 0;
+    if (0 == nx_check_and_advance(&buffer, &cursor, FOOTER_SHORT, SHORT, TAGS_MAP, &msg->section_footer))
         return 0;
 
     return 1;
@@ -634,6 +717,138 @@ nx_field_iterator_t *nx_message_field_to(nx_message_t *msg)
 
     return 0;
 }
+
+
+void mx_message_compose_1(nx_message_t *msg, const char *to, nx_buffer_t *buf_chain)
+{
+}
+
+
+void nx_message_begin_header(nx_message_t *msg)
+{
+}
+
+
+void nx_message_end_header(nx_message_t *msg)
+{
+}
+
+
+void nx_message_begin_delivery_annotations(nx_message_t *msg)
+{
+}
+
+
+void nx_message_end_delivery_annotations(nx_message_t *msg)
+{
+}
+
+
+void nx_message_begin_message_annotations(nx_message_t *msg)
+{
+}
+
+
+void nx_message_end_message_annotations(nx_message_t *msg)
+{
+}
+
+
+void nx_message_begin_message_properties(nx_message_t *msg)
+{
+}
+
+
+void nx_message_end_message_properties(nx_message_t *msg)
+{
+}
+
+
+void nx_message_begin_application_properties(nx_message_t *msg)
+{
+}
+
+
+void nx_message_end_application_properties(nx_message_t *msg)
+{
+}
+
+
+void nx_message_append_body_data(nx_message_t *msg, nx_buffer_t *buf_chain)
+{
+}
+
+
+void nx_message_begin_body_sequence(nx_message_t *msg)
+{
+}
+
+
+void nx_message_end_body_sequence(nx_message_t *msg)
+{
+}
+
+
+void nx_message_begin_footer(nx_message_t *msg)
+{
+}
+
+
+void nx_message_end_footer(nx_message_t *msg)
+{
+}
+
+
+void nx_message_insert_null(nx_message_t *msg)
+{
+}
+
+
+void nx_message_insert_boolean(nx_message_t *msg, int value)
+{
+}
+
+
+void nx_message_insert_ubyte(nx_message_t *msg, uint8_t value)
+{
+}
+
+
+void nx_message_insert_uint(nx_message_t *msg, uint32_t value)
+{
+}
+
+
+void nx_message_insert_ulong(nx_message_t *msg, uint64_t value)
+{
+}
+
+
+void nx_message_insert_binary(nx_message_t *msg, const uint8_t *start, uint32_t len)
+{
+}
+
+
+void nx_message_insert_string(nx_message_t *msg, const char *start)
+{
+}
+
+
+void nx_message_insert_uuid(nx_message_t *msg, const uint8_t *value)
+{
+}
+
+
+void nx_message_insert_symbol(nx_message_t *msg, const char *start, uint32_t len)
+{
+}
+
+
+void nx_message_insert_timestamp(nx_message_t *msg, uint64_t value)
+{
+}
+
+
 
 
 unsigned char *nx_buffer_base(nx_buffer_t *buf)

@@ -38,15 +38,19 @@ typedef struct {
 
 struct nx_message_t {
     DEQ_LINKS(nx_message_t);
-    nx_buffer_list_t     buffers;                     // The buffer chain containing the message
-    pn_delivery_t       *in_delivery;                 // The delivery on which the message arrived
-    pn_delivery_t       *out_delivery;                // The delivery on which the message was last sent
-    nx_field_location_t  section_message_header;      // The message header list
-    nx_field_location_t  section_delivery_annotation; // The delivery annotation map
-    nx_field_location_t  section_message_annotation;  // The message annotation map
-    nx_field_location_t  section_message_properties;  // The message properties list
-    nx_field_location_t  field_user_id;               // The string value of the user-id
-    nx_field_location_t  field_to;                    // The string value of the to field
+    nx_buffer_list_t     buffers;                         // The buffer chain containing the message
+    pn_delivery_t       *in_delivery;                     // The delivery on which the message arrived
+    pn_delivery_t       *out_delivery;                    // The delivery on which the message was last sent
+    nx_field_location_t  section_message_header;          // The message header list
+    nx_field_location_t  section_delivery_annotation;     // The delivery annotation map
+    nx_field_location_t  section_message_annotation;      // The message annotation map
+    nx_field_location_t  section_message_properties;      // The message properties list
+    nx_field_location_t  section_application_properties;  // The application properties list
+    nx_field_location_t  body_data;                       // The message body: Data
+    nx_field_location_t  body_amqp_sequence;              // The message body: AMQP Sequence
+    nx_field_location_t  section_footer;                  // The footer
+    nx_field_location_t  field_user_id;                   // The string value of the user-id
+    nx_field_location_t  field_to;                        // The string value of the to field
 };
 
 struct nx_buffer_t {
@@ -79,11 +83,69 @@ void          nx_free_message(nx_message_t *msg);
 void          nx_free_buffer(nx_buffer_t *buf);
 
 
+typedef enum {
+    NX_DEPTH_NONE,
+    NX_DEPTH_HEADER,
+    NX_DEPTH_DELIVERY_ANNOTATIONS,
+    NX_DEPTH_MESSAGE_ANNOTATIONS,
+    NX_DEPTH_MESSAGE_PROPERTIES,     // Needed for 'user-id' and 'to'
+    NX_DEPTH_APPLICATION_PROPERTIES,
+    NX_DEPTH_BODY,
+    NX_DEPTH_ALL
+} nx_message_depth_t;
+
+//
+// Functions for received messages
+//
 nx_message_t *nx_message_receive(pn_delivery_t *delivery);
-int nx_message_check(nx_message_t *msg);
+int nx_message_check(nx_message_t *msg, nx_message_depth_t depth);
 nx_field_iterator_t *nx_message_field_to(nx_message_t *msg);
 
+//
+// Functions for composed messages
+//
 
+// Convenience Functions
+void mx_message_compose_1(nx_message_t *msg, const char *to, nx_buffer_t *buf_chain);
+
+// Raw Functions
+void nx_message_begin_header(nx_message_t *msg);
+void nx_message_end_header(nx_message_t *msg);
+
+void nx_message_begin_delivery_annotations(nx_message_t *msg);
+void nx_message_end_delivery_annotations(nx_message_t *msg);
+
+void nx_message_begin_message_annotations(nx_message_t *msg);
+void nx_message_end_message_annotations(nx_message_t *msg);
+
+void nx_message_begin_message_properties(nx_message_t *msg);
+void nx_message_end_message_properties(nx_message_t *msg);
+
+void nx_message_begin_application_properties(nx_message_t *msg);
+void nx_message_end_application_properties(nx_message_t *msg);
+
+void nx_message_append_body_data(nx_message_t *msg, nx_buffer_t *buf_chain);
+
+void nx_message_begin_body_sequence(nx_message_t *msg);
+void nx_message_end_body_sequence(nx_message_t *msg);
+
+void nx_message_begin_footer(nx_message_t *msg);
+void nx_message_end_footer(nx_message_t *msg);
+
+void nx_message_insert_null(nx_message_t *msg);
+void nx_message_insert_boolean(nx_message_t *msg, int value);
+void nx_message_insert_ubyte(nx_message_t *msg, uint8_t value);
+void nx_message_insert_uint(nx_message_t *msg, uint32_t value);
+void nx_message_insert_ulong(nx_message_t *msg, uint64_t value);
+void nx_message_insert_binary(nx_message_t *msg, const uint8_t *start, uint32_t len);
+void nx_message_insert_string(nx_message_t *msg, const char *start);
+void nx_message_insert_uuid(nx_message_t *msg, const uint8_t *value);
+void nx_message_insert_symbol(nx_message_t *msg, const char *start, uint32_t len);
+void nx_message_insert_timestamp(nx_message_t *msg, uint64_t value);
+
+//
+// Functions for buffers
+//
 unsigned char *nx_buffer_base(nx_buffer_t *buf);      // Pointer to the first octet in the buffer
 unsigned char *nx_buffer_cursor(nx_buffer_t *buf);    // Pointer to the first free octet in the buffer
 size_t         nx_buffer_capacity(nx_buffer_t *buf);  // Size of free space in the buffer in octets
