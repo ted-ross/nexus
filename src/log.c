@@ -35,7 +35,7 @@ static char *cls_prefix(int cls)
     return "";
 }
 
-void nx_log(char *module, int cls, char *fmt, ...)
+void nx_log(const char *module, int cls, const char *fmt, ...)
 {
     if (!(cls & mask))
         return;

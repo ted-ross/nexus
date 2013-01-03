@@ -24,7 +24,7 @@
 #define LOG_ERROR 0x00000002
 #define LOG_INFO  0x00000004
 
-void nx_log(char *module, int cls, char *fmt, ...);
+void nx_log(const char *module, int cls, const char *fmt, ...);
 
 void nx_log_set_mask(int mask);
 
