@@ -234,7 +234,7 @@ void *nx_connection_get_context(nx_connection_t *conn);
  * @param conn Connection object supplied in NX_CONN_EVENT_{LISTENER,CONNETOR}_OPEN
  * @return The proton connection object.
  */
-pn_connection_t *nx_connection_get_engine(nx_connection_t *conn);
+pn_connection_t *nx_connection_pn(nx_connection_t *conn);
 
 
 /**

@@ -361,6 +361,8 @@ static void open_handler(nx_connection_t *conn, nx_direction_t dir)
     nxc_node_type_t *nt_item = DEQ_HEAD(node_type_list);
     sys_mutex_unlock(lock);
 
+    pn_connection_open(nx_connection_pn(conn));
+
     while (nt_item) {
         nt = nt_item->ntype;
         if (dir == NX_INCOMING) {
@@ -380,7 +382,7 @@ static void open_handler(nx_connection_t *conn, nx_direction_t dir)
 
 static int handler(void* context, nx_conn_event_t event, nx_connection_t *nx_conn)
 {
-    pn_connection_t *conn = nx_connection_get_engine(nx_conn);
+    pn_connection_t *conn = nx_connection_pn(nx_conn);
 
     switch (event) {
     case NX_CONN_EVENT_LISTENER_OPEN:  open_handler(nx_conn, NX_INCOMING);   break;
@@ -487,6 +489,8 @@ nx_node_t *nx_container_create_node(const nx_node_type_t *nt,
         strcpy(node->name, name);
     }
 
+    nx_log(module, LOG_TRACE, "Node of type '%s' created with name '%s'", nt->type_name, name);
+
     return node;
 }
 
@@ -524,9 +528,23 @@ nx_lifetime_policy_t nx_container_node_get_life_policy(const nx_node_t *node)
 }
 
 
-nx_link_t *nx_container_create_link(nx_node_t *node, nx_connection_t *conn, nx_direction_t dir, pn_terminus_t *term)
+nx_link_t *nx_link(nx_node_t *node, nx_connection_t *conn, nx_direction_t dir, const char* name)
 {
-    return 0;  // TODO
+    pn_session_t *sess = pn_session(nx_connection_pn(conn));
+    nx_link_t    *link = new_nx_link_t();
+
+    if (dir == NX_OUTGOING)
+        link->pn_link = pn_sender(sess, name);
+    else
+        link->pn_link = pn_receiver(sess, name);
+    link->context = node->context;
+    link->node    = node;
+
+    pn_link_set_context(link->pn_link, link);
+
+    pn_session_open(sess);
+
+    return link;
 }
 
 
@@ -542,9 +560,33 @@ void *nx_link_get_context(nx_link_t *link)
 }
 
 
-pn_link_t *nx_link_get_engine(nx_link_t *link)
+pn_link_t *nx_link_pn(nx_link_t *link)
 {
     return link->pn_link;
+}
+
+
+pn_terminus_t *nx_link_source(nx_link_t *link)
+{
+    return pn_link_source(link->pn_link);
+}
+
+
+pn_terminus_t *nx_link_target(nx_link_t *link)
+{
+    return pn_link_target(link->pn_link);
+}
+
+
+pn_terminus_t *nx_link_remote_source(nx_link_t *link)
+{
+    return pn_link_remote_source(link->pn_link);
+}
+
+
+pn_terminus_t *nx_link_remote_target(nx_link_t *link)
+{
+    return pn_link_remote_target(link->pn_link);
 }
 
 

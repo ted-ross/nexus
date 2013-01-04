@@ -97,12 +97,14 @@ void nx_container_node_set_context(nx_node_t *node, void *node_context);
 nx_dist_mode_t nx_container_node_get_dist_modes(const nx_node_t *node);
 nx_lifetime_policy_t nx_container_node_get_life_policy(const nx_node_t *node);
 
-nx_link_t *nx_container_create_link(nx_node_t *node, nx_connection_t *conn, nx_direction_t dir, pn_terminus_t *term);
-
-
+nx_link_t *nx_link(nx_node_t *node, nx_connection_t *conn, nx_direction_t dir, const char *name);
 void nx_link_set_context(nx_link_t *link, void *link_context);
 void *nx_link_get_context(nx_link_t *link);
-pn_link_t *nx_link_get_engine(nx_link_t *link);
+pn_link_t *nx_link_pn(nx_link_t *link);
+pn_terminus_t *nx_link_source(nx_link_t *link);
+pn_terminus_t *nx_link_target(nx_link_t *link);
+pn_terminus_t *nx_link_remote_source(nx_link_t *link);
+pn_terminus_t *nx_link_remote_target(nx_link_t *link);
 void nx_link_activate(nx_link_t *link);
 void nx_link_close(nx_link_t *link);
 

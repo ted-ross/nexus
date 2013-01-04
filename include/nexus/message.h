@@ -36,6 +36,8 @@ typedef struct {
     int          parsed;  // non-zero iff the buffer chain has been parsed to find this field
 } nx_field_location_t;
 
+
+// TODO - consider using pointers to nx_field_location_t below to save memory
 struct nx_message_t {
     DEQ_LINKS(nx_message_t);
     nx_buffer_list_t     buffers;                         // The buffer chain containing the message

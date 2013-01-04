@@ -146,7 +146,7 @@ static void bq_disp_handler(void* context, nx_link_t *link, pn_delivery_t *deliv
 static int bq_incoming_link_handler(void* context, nx_link_t *link)
 {
     basic_queue_t  *bq      = (basic_queue_t*) context;
-    pn_link_t      *pn_link = nx_link_get_engine(link);
+    pn_link_t      *pn_link = nx_link_pn(link);
     const char     *name    = pn_link_name(pn_link);
     const char     *r_tgt   = pn_terminus_get_address(pn_link_remote_target(pn_link));
     const char     *r_src   = pn_terminus_get_address(pn_link_remote_source(pn_link));
@@ -175,7 +175,7 @@ static int bq_incoming_link_handler(void* context, nx_link_t *link)
 static int bq_outgoing_link_handler(void* context, nx_link_t *link)
 {
     basic_queue_t  *bq      = (basic_queue_t*) context;
-    pn_link_t      *pn_link = nx_link_get_engine(link);
+    pn_link_t      *pn_link = nx_link_pn(link);
     const char     *name    = pn_link_name(pn_link);
     const char     *r_tgt   = pn_terminus_get_address(pn_link_remote_target(pn_link));
     const char     *r_src   = pn_terminus_get_address(pn_link_remote_source(pn_link));
@@ -203,7 +203,7 @@ static int bq_outgoing_link_handler(void* context, nx_link_t *link)
 static int bq_writable_link_handler(void* context, nx_link_t *link)
 {
     basic_queue_t *bq      = (basic_queue_t*) context;
-    pn_link_t     *pn_link = nx_link_get_engine(link);
+    pn_link_t     *pn_link = nx_link_pn(link);
     int            grant_delivery = 0;
     pn_delivery_t *delivery;
 
@@ -227,7 +227,7 @@ static int bq_writable_link_handler(void* context, nx_link_t *link)
 static int bq_link_detach_handler(void* context, nx_link_t *link, int closed)
 {
     basic_queue_t  *bq      = (basic_queue_t*) context;
-    pn_link_t      *pn_link = nx_link_get_engine(link);
+    pn_link_t      *pn_link = nx_link_pn(link);
     const char     *name    = pn_link_name(pn_link);
     const char     *r_tgt   = pn_terminus_get_address(pn_link_remote_target(pn_link));
     const char     *r_src   = pn_terminus_get_address(pn_link_remote_source(pn_link));

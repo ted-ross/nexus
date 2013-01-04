@@ -130,7 +130,7 @@ static void router_rx_handler(void* context, nx_link_t *link, pn_delivery_t *del
             nx_field_iterator_free(iter);
 
             if (result == 0) {
-                pn_link_t* pn_outlink = nx_link_get_engine(rlink->link);
+                pn_link_t* pn_outlink = nx_link_pn(rlink->link);
                 DEQ_INSERT_TAIL(rlink->out_fifo, msg);
                 pn_link_offered(pn_outlink, DEQ_SIZE(rlink->out_fifo));
                 nx_link_activate(rlink->link);
@@ -189,7 +189,7 @@ static int router_incoming_link_handler(void* context, nx_link_t *link)
 {
     nx_router_t    *router  = (nx_router_t*) context;
     nx_link_item_t *item    = new_nx_link_item_t();
-    pn_link_t      *pn_link = nx_link_get_engine(link);
+    pn_link_t      *pn_link = nx_link_pn(link);
 
     if (item) {
         DEQ_ITEM_INIT(item);
@@ -213,7 +213,7 @@ static int router_incoming_link_handler(void* context, nx_link_t *link)
 static int router_outgoing_link_handler(void* context, nx_link_t *link)
 {
     nx_router_t *router  = (nx_router_t*) context;
-    pn_link_t   *pn_link = nx_link_get_engine(link);
+    pn_link_t   *pn_link = nx_link_pn(link);
     const char  *r_tgt   = pn_terminus_get_address(pn_link_remote_target(pn_link));
 
     sys_mutex_lock(router->lock);
@@ -248,7 +248,7 @@ static int router_writable_link_handler(void* context, nx_link_t *link)
     int               grant_delivery = 0;
     pn_delivery_t    *delivery;
     nx_router_link_t *rlink = (nx_router_link_t*) nx_link_get_context(link);
-    pn_link_t        *pn_link = nx_link_get_engine(link);
+    pn_link_t        *pn_link = nx_link_pn(link);
     uint64_t          tag;
 
     sys_mutex_lock(router->lock);
@@ -274,7 +274,7 @@ static int router_writable_link_handler(void* context, nx_link_t *link)
 static int router_link_detach_handler(void* context, nx_link_t *link, int closed)
 {
     nx_router_t    *router  = (nx_router_t*) context;
-    pn_link_t      *pn_link = nx_link_get_engine(link);
+    pn_link_t      *pn_link = nx_link_pn(link);
     const char     *r_tgt   = pn_terminus_get_address(pn_link_remote_target(pn_link));
     nx_link_item_t *item;
 
