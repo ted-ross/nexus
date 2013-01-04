@@ -21,11 +21,12 @@
 ## Build test applications
 ##
 set(test_SOURCES
-    run_tests.c
-    tool_test.c
-    timer_test.c
     alloc_test.c
+    message_test.c
+    run_tests.c
     server_test.c
+    timer_test.c
+    tool_test.c
     )
 
 add_executable(run_tests ${test_SOURCES})

@@ -288,6 +288,134 @@ static int nx_check_and_advance(nx_buffer_t         **buffer,
 }
 
 
+static void nx_insert(nx_message_t *msg, const uint8_t *seq, size_t len)
+{
+    nx_buffer_t *buf = DEQ_TAIL(msg->buffers);
+
+    while (len > 0) {
+        if (buf == 0 || nx_buffer_capacity(buf) == 0) {
+            buf = nx_allocate_buffer();
+            if (buf == 0)
+                return;
+            DEQ_INSERT_TAIL(msg->buffers, buf);
+        }
+
+        size_t to_copy = nx_buffer_capacity(buf);
+        if (to_copy > len)
+            to_copy = len;
+        memcpy(nx_buffer_cursor(buf), seq, to_copy);
+        nx_buffer_insert(buf, to_copy);
+        len -= to_copy;
+        seq += to_copy;
+        msg->length += to_copy;
+    }
+}
+
+
+static void nx_insert_8(nx_message_t *msg, uint8_t value)
+{
+    nx_insert(msg, &value, 1);
+}
+
+
+static void nx_insert_32(nx_message_t *msg, uint32_t value)
+{
+    uint8_t buf[4];
+    buf[0] = (uint8_t) ((value & 0xFF000000) >> 24);
+    buf[1] = (uint8_t) ((value & 0x00FF0000) >> 16);
+    buf[2] = (uint8_t) ((value & 0x0000FF00) >> 8);
+    buf[3] = (uint8_t)  (value & 0x000000FF);
+    nx_insert(msg, buf, 4);
+}
+
+
+static void nx_insert_64(nx_message_t *msg, uint64_t value)
+{
+    uint8_t buf[8];
+    buf[0] = (uint8_t) ((value & 0xFF00000000000000L) >> 56);
+    buf[1] = (uint8_t) ((value & 0x00FF000000000000L) >> 48);
+    buf[2] = (uint8_t) ((value & 0x0000FF0000000000L) >> 40);
+    buf[3] = (uint8_t) ((value & 0x000000FF00000000L) >> 32);
+    buf[4] = (uint8_t) ((value & 0x00000000FF000000L) >> 24);
+    buf[5] = (uint8_t) ((value & 0x0000000000FF0000L) >> 16);
+    buf[6] = (uint8_t) ((value & 0x000000000000FF00L) >> 8);
+    buf[7] = (uint8_t)  (value & 0x00000000000000FFL);
+    nx_insert(msg, buf, 8);
+}
+
+
+static void nx_overwrite(nx_buffer_t **buf, size_t *cursor, uint8_t value)
+{
+    while (*buf) {
+        if (*cursor >= nx_buffer_size(*buf)) {
+            *buf = (*buf)->next;
+            *cursor = 0;
+        } else {
+            nx_buffer_base(*buf)[*cursor] = value;
+            (*cursor)++;
+            return;
+        }
+    }
+}
+
+
+static void nx_overwrite_32(nx_field_location_t *field, uint32_t value)
+{
+    nx_buffer_t *buf    = field->buffer;
+    size_t       cursor = field->offset;
+
+    nx_overwrite(&buf, &cursor, (uint8_t) ((value & 0xFF000000) >> 24));
+    nx_overwrite(&buf, &cursor, (uint8_t) ((value & 0x00FF0000) >> 24));
+    nx_overwrite(&buf, &cursor, (uint8_t) ((value & 0x0000FF00) >> 24));
+    nx_overwrite(&buf, &cursor, (uint8_t)  (value & 0x000000FF));
+}
+
+
+static void nx_start_list_performative(nx_message_t *msg, uint8_t code)
+{
+    //
+    // Insert the short-form performative tag
+    //
+    nx_insert(msg, (const uint8_t*) "\x00\x53", 2);
+    nx_insert_8(msg, code);
+
+    //
+    // Open the list with a list32 tag
+    //
+    nx_insert_8(msg, 0xd0);
+
+    //
+    // Mark the current location to later overwrite the length
+    //
+    msg->compose_length.buffer = DEQ_TAIL(msg->buffers);
+    msg->compose_length.offset = nx_buffer_size(msg->compose_length.buffer);
+    msg->compose_length.length = 4;
+    msg->compose_length.parsed = 1;
+
+    nx_insert(msg, (const uint8_t*) "\x00\x00\x00\x00", 4);
+
+    //
+    // Mark the current location to later overwrite the count
+    //
+    msg->compose_count.buffer = DEQ_TAIL(msg->buffers);
+    msg->compose_count.offset = nx_buffer_size(msg->compose_count.buffer);
+    msg->compose_count.length = 4;
+    msg->compose_count.parsed = 1;
+
+    nx_insert(msg, (const uint8_t*) "\x00\x00\x00\x00", 4);
+
+    msg->length = 4; // Include the length of the count field
+    msg->count = 0;
+}
+
+
+static void nx_end_list(nx_message_t *msg)
+{
+    nx_overwrite_32(&msg->compose_length, msg->length);
+    nx_overwrite_32(&msg->compose_count,  msg->count);
+}
+
+
 const nx_allocator_config_t *nx_allocator_default_config(void)
 {
     default_config.buffer_size                     = 1024;
@@ -318,6 +446,7 @@ void nx_allocator_initialize(const nx_allocator_config_t *c)
 
     for (i = 0; i < config->buffer_preallocation_count; i++) {
         buf = (nx_buffer_t*) malloc (sizeof(nx_buffer_t) + config->buffer_size);
+        DEQ_ITEM_INIT(buf);
         DEQ_INSERT_TAIL(global.buffer_free_list, buf);
     }
 }
@@ -719,58 +848,93 @@ nx_field_iterator_t *nx_message_field_to(nx_message_t *msg)
 }
 
 
-void mx_message_compose_1(nx_message_t *msg, const char *to, nx_buffer_t *buf_chain)
+void nx_message_compose_1(nx_message_t *msg, const char *to, nx_buffer_t *buf_chain)
 {
+    nx_message_begin_header(msg);
+    nx_message_insert_boolean(msg, 0);  // durable
+    nx_message_insert_ubyte(msg, 4);    // priority
+    nx_message_insert_null(msg);        // ttl
+    nx_message_insert_boolean(msg, 0);  // first-acquirer
+    nx_message_insert_uint(msg, 0);     // delivery-count
+    nx_message_end_header(msg);
+
+    nx_message_begin_message_properties(msg);
+    nx_message_insert_null(msg);          // message-id
+    nx_message_insert_null(msg);          // user-id
+    nx_message_insert_string(msg, to);    // to
+    nx_message_insert_null(msg);          // subject
+    nx_message_insert_null(msg);          // reply-to
+    nx_message_insert_null(msg);          // correlation-id
+    nx_message_insert_null(msg);          // content-type
+    nx_message_insert_null(msg);          // content-encoding
+    nx_message_insert_timestamp(msg, 0);  // absolute-expiry-time
+    nx_message_insert_timestamp(msg, 0);  // creation-time
+    nx_message_insert_null(msg);          // group-id
+    nx_message_insert_uint(msg, 0);       // group-sequence
+    nx_message_insert_null(msg);          // reply-to-group-id
+    nx_message_end_message_properties(msg);
+
+    nx_message_append_body_data(msg, buf_chain);
 }
 
 
 void nx_message_begin_header(nx_message_t *msg)
 {
+    nx_start_list_performative(msg, 0x70);
 }
 
 
 void nx_message_end_header(nx_message_t *msg)
 {
+    nx_end_list(msg);
 }
 
 
 void nx_message_begin_delivery_annotations(nx_message_t *msg)
 {
+    assert(0); // Not Implemented
 }
 
 
 void nx_message_end_delivery_annotations(nx_message_t *msg)
 {
+    assert(0); // Not Implemented
 }
 
 
 void nx_message_begin_message_annotations(nx_message_t *msg)
 {
+    assert(0); // Not Implemented
 }
 
 
 void nx_message_end_message_annotations(nx_message_t *msg)
 {
+    assert(0); // Not Implemented
 }
 
 
 void nx_message_begin_message_properties(nx_message_t *msg)
 {
+    nx_start_list_performative(msg, 0x73);
 }
 
 
 void nx_message_end_message_properties(nx_message_t *msg)
 {
+    nx_end_list(msg);
 }
 
 
 void nx_message_begin_application_properties(nx_message_t *msg)
 {
+    assert(0); // Not Implemented
 }
 
 
 void nx_message_end_application_properties(nx_message_t *msg)
 {
+    assert(0); // Not Implemented
 }
 
 
@@ -791,64 +955,132 @@ void nx_message_end_body_sequence(nx_message_t *msg)
 
 void nx_message_begin_footer(nx_message_t *msg)
 {
+    assert(0); // Not Implemented
 }
 
 
 void nx_message_end_footer(nx_message_t *msg)
 {
+    assert(0); // Not Implemented
 }
 
 
 void nx_message_insert_null(nx_message_t *msg)
 {
+    nx_insert_8(msg, 0x40);
+    msg->count++;
 }
 
 
 void nx_message_insert_boolean(nx_message_t *msg, int value)
 {
+    if (value)
+        nx_insert(msg, (const uint8_t*) "\x56\x01", 2);
+    else
+        nx_insert(msg, (const uint8_t*) "\x56\x00", 2);
+    msg->count++;
 }
 
 
 void nx_message_insert_ubyte(nx_message_t *msg, uint8_t value)
 {
+    nx_insert_8(msg, 0x50);
+    nx_insert_8(msg, value);
+    msg->count++;
 }
 
 
 void nx_message_insert_uint(nx_message_t *msg, uint32_t value)
 {
+    if (value == 0) {
+        nx_insert_8(msg, 0x43);  // uint0
+    } else if (value < 256) {
+        nx_insert_8(msg, 0x52);  // smalluint
+        nx_insert_8(msg, (uint8_t) value);
+    } else {
+        nx_insert_8(msg, 0x70);  // uint
+        nx_insert_32(msg, value);
+    }
+    msg->count++;
 }
 
 
 void nx_message_insert_ulong(nx_message_t *msg, uint64_t value)
 {
+    if (value == 0) {
+        nx_insert_8(msg, 0x44);  // ulong0
+    } else if (value < 256) {
+        nx_insert_8(msg, 0x53);  // smallulong
+        nx_insert_8(msg, (uint8_t) value);
+    } else {
+        nx_insert_8(msg, 0x80);  // ulong
+        nx_insert_64(msg, value);
+    }
+    msg->count++;
 }
 
 
-void nx_message_insert_binary(nx_message_t *msg, const uint8_t *start, uint32_t len)
+void nx_message_insert_binary(nx_message_t *msg, const uint8_t *start, size_t len)
 {
+    if (len < 256) {
+        nx_insert_8(msg, 0xa0);  // vbin8
+        nx_insert_8(msg, (uint8_t) len);
+        nx_insert(msg, start, len);
+    } else {
+        nx_insert_8(msg, 0xb0);  // vbin32
+        nx_insert_32(msg, len);
+        nx_insert(msg, start, len);
+    }
+    msg->count++;
 }
 
 
 void nx_message_insert_string(nx_message_t *msg, const char *start)
 {
+    uint32_t len = strlen(start);
+
+    if (len < 256) {
+        nx_insert_8(msg, 0xa1);  // str8-utf8
+        nx_insert_8(msg, (uint8_t) len);
+        nx_insert(msg, (const uint8_t*) start, len);
+    } else {
+        nx_insert_8(msg, 0xb1);  // str32-utf8
+        nx_insert_32(msg, len);
+        nx_insert(msg, (const uint8_t*) start, len);
+    }
+    msg->count++;
 }
 
 
 void nx_message_insert_uuid(nx_message_t *msg, const uint8_t *value)
 {
+    nx_insert_8(msg, 0x98);  // uuid
+    nx_insert(msg, value, 16);
+    msg->count++;
 }
 
 
-void nx_message_insert_symbol(nx_message_t *msg, const char *start, uint32_t len)
+void nx_message_insert_symbol(nx_message_t *msg, const char *start, size_t len)
 {
+    if (len < 256) {
+        nx_insert_8(msg, 0xa3);  // sym8
+        nx_insert_8(msg, (uint8_t) len);
+        nx_insert(msg, (const uint8_t*) start, len);
+    } else {
+        nx_insert_8(msg, 0xb3);  // sym32
+        nx_insert_32(msg, len);
+        nx_insert(msg, (const uint8_t*) start, len);
+    }
+    msg->count++;
 }
 
 
 void nx_message_insert_timestamp(nx_message_t *msg, uint64_t value)
 {
+    nx_insert_8(msg, 0x83);  // timestamp
+    nx_insert_64(msg, value);
+    msg->count++;
 }
-
-
 
 
 unsigned char *nx_buffer_base(nx_buffer_t *buf)

@@ -51,6 +51,10 @@ struct nx_message_t {
     nx_field_location_t  section_footer;                  // The footer
     nx_field_location_t  field_user_id;                   // The string value of the user-id
     nx_field_location_t  field_to;                        // The string value of the to field
+    nx_field_location_t  compose_length;
+    nx_field_location_t  compose_count;
+    uint32_t             length;
+    uint32_t             count;
 };
 
 struct nx_buffer_t {
@@ -106,7 +110,7 @@ nx_field_iterator_t *nx_message_field_to(nx_message_t *msg);
 //
 
 // Convenience Functions
-void mx_message_compose_1(nx_message_t *msg, const char *to, nx_buffer_t *buf_chain);
+void nx_message_compose_1(nx_message_t *msg, const char *to, nx_buffer_t *buf_chain);
 
 // Raw Functions
 void nx_message_begin_header(nx_message_t *msg);
@@ -137,10 +141,10 @@ void nx_message_insert_boolean(nx_message_t *msg, int value);
 void nx_message_insert_ubyte(nx_message_t *msg, uint8_t value);
 void nx_message_insert_uint(nx_message_t *msg, uint32_t value);
 void nx_message_insert_ulong(nx_message_t *msg, uint64_t value);
-void nx_message_insert_binary(nx_message_t *msg, const uint8_t *start, uint32_t len);
+void nx_message_insert_binary(nx_message_t *msg, const uint8_t *start, size_t len);
 void nx_message_insert_string(nx_message_t *msg, const char *start);
 void nx_message_insert_uuid(nx_message_t *msg, const uint8_t *value);
-void nx_message_insert_symbol(nx_message_t *msg, const char *start, uint32_t len);
+void nx_message_insert_symbol(nx_message_t *msg, const char *start, size_t len);
 void nx_message_insert_timestamp(nx_message_t *msg, uint64_t value);
 
 //
