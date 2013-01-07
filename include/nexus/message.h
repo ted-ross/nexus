@@ -48,11 +48,11 @@ struct nx_message_t {
     nx_field_location_t  section_message_annotation;      // The message annotation map
     nx_field_location_t  section_message_properties;      // The message properties list
     nx_field_location_t  section_application_properties;  // The application properties list
-    nx_field_location_t  body_data;                       // The message body: Data
-    nx_field_location_t  body_amqp_sequence;              // The message body: AMQP Sequence
+    nx_field_location_t  section_body;                    // The message body: Data
     nx_field_location_t  section_footer;                  // The footer
     nx_field_location_t  field_user_id;                   // The string value of the user-id
     nx_field_location_t  field_to;                        // The string value of the to field
+    nx_field_location_t  body;                            // The body of the message
     nx_field_location_t  compose_length;
     nx_field_location_t  compose_count;
     uint32_t             length;
@@ -106,6 +106,7 @@ typedef enum {
 nx_message_t *nx_message_receive(pn_delivery_t *delivery);
 int nx_message_check(nx_message_t *msg, nx_message_depth_t depth);
 nx_field_iterator_t *nx_message_field_to(nx_message_t *msg);
+nx_field_iterator_t *nx_message_body(nx_message_t *msg);
 
 //
 // Functions for composed messages

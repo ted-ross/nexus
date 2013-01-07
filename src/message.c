@@ -515,16 +515,16 @@ nx_message_t *nx_allocate_message(void)
     msg->section_message_properties.parsed = 0;
     msg->section_application_properties.buffer = 0;
     msg->section_application_properties.parsed = 0;
-    msg->body_data.buffer = 0;
-    msg->body_data.parsed = 0;
-    msg->body_amqp_sequence.buffer = 0;
-    msg->body_amqp_sequence.parsed = 0;
+    msg->section_body.buffer = 0;
+    msg->section_body.parsed = 0;
     msg->section_footer.buffer = 0;
     msg->section_footer.parsed = 0;
     msg->field_user_id.buffer = 0;
     msg->field_user_id.parsed = 0;
     msg->field_to.buffer = 0;
     msg->field_to.parsed = 0;
+    msg->body.buffer = 0;
+    msg->body.parsed = 0;
     return msg;
 }
 
@@ -795,13 +795,13 @@ int nx_message_check(nx_message_t *msg, nx_message_depth_t depth)
     //
     // BODY  (Note that this function expects a single data section or a single AMQP sequence)
     //
-    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_DATA_LONG,      LONG,  TAGS_BINARY, &msg->body_data))
+    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_DATA_LONG,      LONG,  TAGS_BINARY, &msg->section_body))
         return 0;
-    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_DATA_SHORT,     SHORT, TAGS_BINARY, &msg->body_data))
+    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_DATA_SHORT,     SHORT, TAGS_BINARY, &msg->section_body))
         return 0;
-    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_SEQUENCE_LONG,  LONG,  TAGS_LIST,   &msg->body_amqp_sequence))
+    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_SEQUENCE_LONG,  LONG,  TAGS_LIST,   &msg->section_body))
         return 0;
-    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_SEQUENCE_SHORT, SHORT, TAGS_LIST,   &msg->body_amqp_sequence))
+    if (0 == nx_check_and_advance(&buffer, &cursor, BODY_SEQUENCE_SHORT, SHORT, TAGS_LIST,   &msg->section_body))
         return 0;
 
     if (depth == NX_DEPTH_BODY)
@@ -842,6 +842,27 @@ nx_field_iterator_t *nx_message_field_to(nx_message_t *msg)
         result = traverse_field(&cursor, &buffer, 0); // user_id
         if (!result) return 0;
         result = traverse_field(&cursor, &buffer, &msg->field_to); // to
+        if (!result) return 0;
+    }
+
+    return 0;
+}
+
+
+nx_field_iterator_t *nx_message_body(nx_message_t *msg)
+{
+    while (1) {
+        if (msg->body.parsed)
+            return nx_field_iterator_buffer(msg->body.buffer, msg->body.offset, msg->body.length, ITER_VIEW_ALL);
+
+        if (msg->section_body.parsed == 0)
+            break;
+
+        nx_buffer_t   *buffer = msg->section_body.buffer;
+        unsigned char *cursor = nx_buffer_base(buffer) + msg->section_body.offset;
+        int result;
+
+        result = traverse_field(&cursor, &buffer, &msg->body);
         if (!result) return 0;
     }
 
