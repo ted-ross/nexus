@@ -896,7 +896,8 @@ void nx_message_compose_1(nx_message_t *msg, const char *to, nx_buffer_t *buf_ch
     nx_message_insert_null(msg);          // reply-to-group-id
     nx_message_end_message_properties(msg);
 
-    nx_message_append_body_data(msg, buf_chain);
+    if (buf_chain)
+        nx_message_append_body_data(msg, buf_chain);
 }
 
 
@@ -974,6 +975,7 @@ void nx_message_append_body_data(nx_message_t *msg, nx_buffer_t *buf_chain)
         buf = DEQ_NEXT(buf);
     }
 
+    nx_insert(msg, (const uint8_t*) "\x00\x53\x75", 3);
     if (len < 256) {
         nx_insert_8(msg, 0xa0);  // vbin8
         nx_insert_8(msg, (uint8_t) len);

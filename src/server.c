@@ -853,8 +853,6 @@ nx_user_fd_t *nx_user_fd(int fd, void *context)
     ufd->pn_conn = pn_connector_fd(nx_server->driver, fd, (void*) ctx);
     pn_driver_wakeup(nx_server->driver);
 
-    printf("user-fd=%d\n", fd);
-
     return ufd;
 }
 
