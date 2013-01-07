@@ -25,7 +25,7 @@
 
 
 //
-// Per-Queue allocator (protected by the queue's lock)
+// Per-Thread allocator
 //
 typedef struct nx_allocator_t {
     nx_message_list_t  message_free_list;
@@ -551,6 +551,7 @@ nx_buffer_t *nx_allocate_buffer(void)
     if (DEQ_SIZE(alloc->buffer_free_list) == 0) {
         // Allocate a buffer from the heap
         buf = (nx_buffer_t*) malloc (sizeof(nx_buffer_t) + config->buffer_size);
+        DEQ_ITEM_INIT(buf);
         DEQ_INSERT_TAIL(alloc->buffer_free_list, buf);
     }
 
@@ -940,6 +941,30 @@ void nx_message_end_application_properties(nx_message_t *msg)
 
 void nx_message_append_body_data(nx_message_t *msg, nx_buffer_t *buf_chain)
 {
+    uint32_t     len   = 0;
+    nx_buffer_t *buf   = buf_chain;
+    nx_buffer_t *last;
+    size_t       count = 0;
+
+    while (buf) {
+        len += nx_buffer_size(buf);
+        count++;
+        last = buf;
+        buf = DEQ_NEXT(buf);
+    }
+
+    if (len < 256) {
+        nx_insert_8(msg, 0xa0);  // vbin8
+        nx_insert_8(msg, (uint8_t) len);
+    } else {
+        nx_insert_8(msg, 0xb0);  // vbin32
+        nx_insert_32(msg, len);
+    }
+
+    buf_chain->prev         = msg->buffers.tail;
+    msg->buffers.tail->next = buf_chain;
+    msg->buffers.tail       = last;
+    msg->buffers.size      += count;
 }
 
 
@@ -1025,12 +1050,11 @@ void nx_message_insert_binary(nx_message_t *msg, const uint8_t *start, size_t le
     if (len < 256) {
         nx_insert_8(msg, 0xa0);  // vbin8
         nx_insert_8(msg, (uint8_t) len);
-        nx_insert(msg, start, len);
     } else {
         nx_insert_8(msg, 0xb0);  // vbin32
         nx_insert_32(msg, len);
-        nx_insert(msg, start, len);
     }
+    nx_insert(msg, start, len);
     msg->count++;
 }
 

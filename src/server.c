@@ -851,6 +851,9 @@ nx_user_fd_t *nx_user_fd(int fd, void *context)
     ufd->context = context;
     ufd->fd      = fd;
     ufd->pn_conn = pn_connector_fd(nx_server->driver, fd, (void*) ctx);
+    pn_driver_wakeup(nx_server->driver);
+
+    printf("user-fd=%d\n", fd);
 
     return ufd;
 }
@@ -866,12 +869,14 @@ void nx_user_fd_free(nx_user_fd_t *ufd)
 void nx_user_fd_activate_read(nx_user_fd_t *ufd)
 {
     pn_connector_activate(ufd->pn_conn, PN_CONNECTOR_READABLE);
+    pn_driver_wakeup(nx_server->driver);
 }
 
 
 void nx_user_fd_activate_write(nx_user_fd_t *ufd)
 {
     pn_connector_activate(ufd->pn_conn, PN_CONNECTOR_WRITABLE);
+    pn_driver_wakeup(nx_server->driver);
 }
 
 

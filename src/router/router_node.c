@@ -87,7 +87,7 @@ static void router_tx_handler(void* context, nx_link_t *link, pn_delivery_t *del
     if (msg->in_delivery)
         msg->out_delivery = delivery;
     else
-        pn_delivery_settle(delivery);
+        pn_delivery_settle(delivery);  // TODO - free the message here?
 
     size = (DEQ_SIZE(rlink->out_fifo));
     sys_mutex_unlock(router->lock);
