@@ -874,26 +874,26 @@ void nx_message_compose_1(nx_message_t *msg, const char *to, nx_buffer_t *buf_ch
 {
     nx_message_begin_header(msg);
     nx_message_insert_boolean(msg, 0);  // durable
-    nx_message_insert_ubyte(msg, 4);    // priority
-    nx_message_insert_null(msg);        // ttl
-    nx_message_insert_boolean(msg, 0);  // first-acquirer
-    nx_message_insert_uint(msg, 0);     // delivery-count
+    //nx_message_insert_null(msg);        // priority
+    //nx_message_insert_null(msg);        // ttl
+    //nx_message_insert_boolean(msg, 0);  // first-acquirer
+    //nx_message_insert_uint(msg, 0);     // delivery-count
     nx_message_end_header(msg);
 
     nx_message_begin_message_properties(msg);
     nx_message_insert_null(msg);          // message-id
     nx_message_insert_null(msg);          // user-id
     nx_message_insert_string(msg, to);    // to
-    nx_message_insert_null(msg);          // subject
-    nx_message_insert_null(msg);          // reply-to
-    nx_message_insert_null(msg);          // correlation-id
-    nx_message_insert_null(msg);          // content-type
-    nx_message_insert_null(msg);          // content-encoding
-    nx_message_insert_timestamp(msg, 0);  // absolute-expiry-time
-    nx_message_insert_timestamp(msg, 0);  // creation-time
-    nx_message_insert_null(msg);          // group-id
-    nx_message_insert_uint(msg, 0);       // group-sequence
-    nx_message_insert_null(msg);          // reply-to-group-id
+    //nx_message_insert_null(msg);          // subject
+    //nx_message_insert_null(msg);          // reply-to
+    //nx_message_insert_null(msg);          // correlation-id
+    //nx_message_insert_null(msg);          // content-type
+    //nx_message_insert_null(msg);          // content-encoding
+    //nx_message_insert_timestamp(msg, 0);  // absolute-expiry-time
+    //nx_message_insert_timestamp(msg, 0);  // creation-time
+    //nx_message_insert_null(msg);          // group-id
+    //nx_message_insert_uint(msg, 0);       // group-sequence
+    //nx_message_insert_null(msg);          // reply-to-group-id
     nx_message_end_message_properties(msg);
 
     if (buf_chain)

@@ -86,8 +86,11 @@ static void router_tx_handler(void* context, nx_link_t *link, pn_delivery_t *del
     //
     if (msg->in_delivery)
         msg->out_delivery = delivery;
-    else
-        pn_delivery_settle(delivery);  // TODO - free the message here?
+    else {
+        pn_delivery_set_context(delivery, 0);
+        pn_delivery_settle(delivery);
+        nx_free_message(msg);
+    }
 
     size = (DEQ_SIZE(rlink->out_fifo));
     sys_mutex_unlock(router->lock);
@@ -144,6 +147,8 @@ static void router_rx_handler(void* context, nx_link_t *link, pn_delivery_t *del
     } else {
         pn_delivery_update(delivery, PN_REJECTED);
         pn_delivery_settle(delivery);
+        pn_delivery_set_context(delivery, 0);
+        nx_free_message(msg);
     }
 }
 
@@ -284,13 +289,15 @@ static int router_link_detach_handler(void* context, nx_link_t *link, int closed
 
         nx_field_iterator_t *iter = nx_field_iterator_string(r_tgt, ITER_VIEW_NO_HOST);
         nx_router_link_t    *rlink;
-        int result = hash_retrieve(router->out_hash, iter, (void*) &rlink);
-        if (result == 0) {
-            nx_field_iterator_reset(iter, ITER_VIEW_NO_HOST);
-            hash_remove(router->out_hash, iter);
+        if (iter) {
+            int result = hash_retrieve(router->out_hash, iter, (void*) &rlink);
+            if (result == 0) {
+                nx_field_iterator_reset(iter, ITER_VIEW_NO_HOST);
+                hash_remove(router->out_hash, iter);
+                free_nx_router_link_t(rlink);
+                nx_log(module, LOG_TRACE, "Removed local address: %s", r_tgt);
+            }
             nx_field_iterator_free(iter);
-            free_nx_router_link_t(rlink);
-            nx_log(module, LOG_TRACE, "Removed local address: %s", r_tgt);
         }
     }
     else

@@ -20,6 +20,7 @@
 #include <nexus/iterator.h>
 #include <nexus/message.h>
 #include <nexus/ctools.h>
+#include <nexus/alloc.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -38,6 +39,10 @@ struct nx_field_iterator_t {
     nx_iterator_view_t  view;
     parse_mode_t        mode;
 };
+
+
+ALLOC_DECLARE(nx_field_iterator_t);
+ALLOC_DEFINE(nx_field_iterator_t);
 
 
 typedef enum {
@@ -146,7 +151,7 @@ static void view_initialize(nx_field_iterator_t *iter)
 
 nx_field_iterator_t* nx_field_iterator_string(const char *text, nx_iterator_view_t view)
 {
-    nx_field_iterator_t *iter = NEW(nx_field_iterator_t);
+    nx_field_iterator_t *iter = new_nx_field_iterator_t();
     if (!iter)
         return 0;
 
@@ -162,7 +167,7 @@ nx_field_iterator_t* nx_field_iterator_string(const char *text, nx_iterator_view
 
 nx_field_iterator_t *nx_field_iterator_buffer(nx_buffer_t *buffer, int offset, int length, nx_iterator_view_t view)
 {
-    nx_field_iterator_t *iter = NEW(nx_field_iterator_t);
+    nx_field_iterator_t *iter = new_nx_field_iterator_t();
     if (!iter)
         return 0;
 
@@ -178,7 +183,7 @@ nx_field_iterator_t *nx_field_iterator_buffer(nx_buffer_t *buffer, int offset, i
 
 void nx_field_iterator_free(nx_field_iterator_t *iter)
 {
-    free(iter);
+    free_nx_field_iterator_t(iter);
 }
 
 
