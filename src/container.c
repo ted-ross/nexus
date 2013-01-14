@@ -489,7 +489,8 @@ nx_node_t *nx_container_create_node(const nx_node_type_t *nt,
         strcpy(node->name, name);
     }
 
-    nx_log(module, LOG_TRACE, "Node of type '%s' created with name '%s'", nt->type_name, name);
+    if (name)
+        nx_log(module, LOG_TRACE, "Node of type '%s' created with name '%s'", nt->type_name, name);
 
     return node;
 }

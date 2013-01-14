@@ -322,6 +322,12 @@ typedef struct nx_server_config_t {
      * according to the set of trusted CAs.
      */
     int ssl_require_peer_authentication;
+
+    /**
+     * Allow the connection to be redirected by the peer (via CLOSE->Redirect).  This is
+     * meaningful for outgoing (connector) connections only.
+     */
+    int allow_redirect;
 } nx_server_config_t;
 
 

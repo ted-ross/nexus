@@ -965,7 +965,7 @@ void nx_message_append_body_data(nx_message_t *msg, nx_buffer_t *buf_chain)
 {
     uint32_t     len   = 0;
     nx_buffer_t *buf   = buf_chain;
-    nx_buffer_t *last;
+    nx_buffer_t *last  = 0;
     size_t       count = 0;
 
     while (buf) {
@@ -984,10 +984,12 @@ void nx_message_append_body_data(nx_message_t *msg, nx_buffer_t *buf_chain)
         nx_insert_32(msg, len);
     }
 
-    buf_chain->prev         = msg->buffers.tail;
-    msg->buffers.tail->next = buf_chain;
-    msg->buffers.tail       = last;
-    msg->buffers.size      += count;
+    if (len > 0) {
+        buf_chain->prev         = msg->buffers.tail;
+        msg->buffers.tail->next = buf_chain;
+        msg->buffers.tail       = last;
+        msg->buffers.size      += count;
+    }
 }
 
 
