@@ -3,6 +3,13 @@ nexus
 
 Multi-Threaded Messaging Server based on Apache Qpid Proton(-c)
 
+Please note that this project is no longer being developed here on github.
+This code base was renamed to "Qpid Dispatch" and has been moved to the
+Apache Qpid project.
+
+http://qpid.apache.org
+svn: http://svn.apache.org/repos/asf/qpid/trunk/qpid/extras/dispatch
+
 
 Introduction:
 
